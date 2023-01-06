@@ -17,7 +17,7 @@ If you have limited experience with Jenkins,
 I’d advise you to run it locally right away and take a look.
 If you’re running [Docker](https://www.docker.com/), the simplest way to run Jenkins is by means of a script like the following.
 
-```
+```sh
 #!/bin/sh
 docker pull jenkinsci/blueocean
 docker run -u root --rm -d \
@@ -61,7 +61,7 @@ for example.
 After you’ve done this for the folder were you’ve cloned the repository,
 replace the content of the Jenkinsfile in the root of the repository to the following and commit your changes.
 
-```
+```groovy
 pipeline {
   agent none
 
@@ -119,7 +119,7 @@ You do this by specifying a label for an agent in your pipeline.
 The steps for this particular agent will then be executed on a node with the given label.
 Modify your Jenkinsfile as follows.
 
-```
+```groovy
 pipeline {
   agent none
 
@@ -171,14 +171,14 @@ For some reason, Docker is not available, and you’ll see a line ending with
 
 If you go to the command line and execute the following command, you’ll understand what’s going on.
 
-```
+```shell-session
 ssh localhost "echo \$PATH"
 ```
 
 This will result in something like `/usr/bin:/bin:/usr/sbin:/sbin`.
 Be sure to escape the dollar sign because the result of the following command will only add to the confusion.
 
-```
+```shell-session
 ssh localhost "echo $PATH"
 ```
 
@@ -203,7 +203,7 @@ that is almost perfect for the Jenkinsfile below.
 You only have to open port 8000 instead of 8080.
 You may also have to pick another prefix for your hostnames if the ones below are taken.
 
-```
+```groovy
 dokkuHostname = "kabisa-dokku-demo-staging.westeurope.cloudapp.azure.com"
 if (env.BRANCH_NAME == "production") {
   dokkuHostname = "kabisa-dokku-demo-production.westeurope.cloudapp.azure.com"
@@ -309,7 +309,7 @@ you need to configure SSH in the Docker container running Jenkins so that it use
 Execute `docker exec -it <CONTAINER_ID> /bin/sh` to enter the container, store the keys somewhere,
 create the file `/root/.ssh/config` if it doesn’t exist yet, and add the following lines to point SSH to the right keys.
 
-```
+```sh
 Host kabisa-dokku-demo-staging.westeurope.cloudapp.azure.com
   IdentityFile ~/.ssh/azure_dokku_git_staging
 
@@ -332,7 +332,7 @@ Because new base images are only available once in a while,
 it’s not really wasteful to use this argument all the time when building images.
 This is what we’re doing in the Jenkinsfile below.
 
-```
+```groovy
 additionalBuildArgs = "--pull"
 if (env.BRANCH_NAME == "master") {
   additionalBuildArgs = "--pull --no-cache"
@@ -474,7 +474,7 @@ I advise all masochists to try this at home and watch it fail.
 
 We can easily fix this by explicitly instructing Docker to use the root user again, as shown below.
 
-```
+```groovy
 additionalBuildArgs = "--pull"
 if (env.BRANCH_NAME == "master") {
   additionalBuildArgs = "--pull --no-cache"
@@ -604,7 +604,7 @@ we need to make sure that the files and folders created as root can be deleted b
 There are a number of ways to do this,
 but one way that doesn’t require any additional configuration of Jenkins is demonstrated in the final version of our Jenkinsfile.
 
-```
+```groovy
 additionalBuildArgs = "--pull"
 if (env.BRANCH_NAME == "master") {
   additionalBuildArgs = "--pull --no-cache"

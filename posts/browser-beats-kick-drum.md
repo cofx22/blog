@@ -15,7 +15,7 @@ First, I want to take a look at the basics of the Web Audio API and try to synth
 At the basis of most syntesized kick drums, there’s a sine wave, or something that’s close to a sine wave.
 The function below produces a sine wave with a frequency of 55Hz that plays for the duration of ten seconds.
 
-```
+```JavaScript
 const play = () => {
     const audioContextClass = window.AudioContext || window.webkitAudioContext;
     const audioContext = new audioContextClass();
@@ -50,7 +50,7 @@ What does that mean for our synthesized kick drum?
 We’ll apply a trick to make your ears believe that there’s still some bass to be heard, even when listening to speakers that can’t reproduce low frequencies very well.
 Instead of a sine wave, we’ll start out with a triangle wave.
 
-```
+```JavaScript
 const play = () => {
     const audioContextClass = window.AudioContext || window.webkitAudioContext;
     const audioContext = new audioContextClass();
@@ -79,7 +79,7 @@ Unfortunately, it sounds a little abrasive, like this:
 Ideally, we’d like to process this triangle wave in such a way that it sounds more like the sine wave, without cutting off too much of the high-frequency sounds.
 We can do that using a wave shaper.
 
-```
+```JavaScript
 const distortionCurve = (amount) => {
     const numberOfSamples = 44100;
     const curve = new Float32Array(numberOfSamples);
@@ -142,7 +142,7 @@ This is enough for you ears to trick you into believing that there’s actually 
 The sound we ended up with sounds a little like “WOOOOOOOOOOH”.
 Let’s turn that into a “WOOOOM”.
 
-```
+```JavaScript
 const play = () => {
     const audioContextClass = window.AudioContext || window.webkitAudioContext;
     const audioContext = new audioContextClass();
@@ -174,7 +174,7 @@ The end result sounds like this.
 
 Now that we have something that sounds like “WOOOOM”, let’s make it sound like “BOOOOM”.
 
-```
+```JavaScript
 const play = () => {
     const audioContextClass = window.AudioContext || window.webkitAudioContext;
     const audioContext = new audioContextClass();
@@ -214,7 +214,7 @@ If you want to achieve more of a 90s Euro house vibe, you can drop down from a h
 If you look at [how classic synthesizers emulate kick drums](https://www.soundonsound.com/techniques/practical-bass-drum-synthesis), you’ll see that they’ll often use a little white noise to give the kicks a little more body.
 The Web Audio API doesn’t provide (white) noise out of the box, but you can use an audio buffer to [create your own](https://noisehack.com/generate-noise-web-audio-api/).
 
-```
+```JavaScript
 const generateWhiteNoiseBuffer = (numberOfSamples) => {
     const buffer = audioContext.createBuffer(1, numberOfSamples, audioContext.sampleRate);
 
@@ -250,7 +250,7 @@ The next step is to apply a fade to this sound, just like we did before.
 
 After that, we cut of most of the higher frequencies using a low pass filter.
 
-```
+```JavaScript
 const play = () => {
 
     ...

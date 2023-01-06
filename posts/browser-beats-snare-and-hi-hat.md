@@ -18,7 +18,7 @@ I took these values from a [MusicTech tutorial](https://www.musictech.net/tutori
 An article in [Sound on Sound](https://www.soundonsound.com/techniques/practical-snare-drum-synthesis) mentions 180Hz and 330Hz.
 Obviously, you should go with whatever frequencies sound best to you.
 
-```
+```JavaScript
 const playSnare = () => {
     const lowTriangle = audioContext.createOscillator();
     lowTriangle.type = 'triangle';
@@ -74,7 +74,7 @@ Let’s just say that I like the slightly more metallic sound of the distorted t
 We’ll use white noise again to represent the second component.
 This time, we’ll use a filter to cut of all frequencies below 2kHz.
 
-```
+```JavaScript
 const playSnare = () => {
 
     ...
@@ -112,7 +112,7 @@ Some filtered white noise is all you need for a hi-hat.
 We again cut all frequencies below 2kHz.
 This time, the volume should fade to zero in 100 milliseconds.
 
-```
+```JavaScript
 const playHiHat = () => {
     const noise = whiteNoiseBufferSource();
 

@@ -12,7 +12,7 @@ Suffice to say, I’m a big fan.
 
 If you’ve never heard of LaTex, consider the following document:
 
-```
+```latex
 \documentclass{article}
 \usepackage[pdfborder={0 0 0}]{hyperref}
 \title{Good-looking PDFs with CSS for Paged Media and Markdown}
@@ -63,7 +63,7 @@ There are a number of [competitors](https://print-css.rocks/tools.html), but mos
 Among other things, CSS for paged media allows you to target specific parts of the margin around each page.
 For example, the `@top-right` rule below specifies that the top-right part of the margin of each page should contain a logo.
 
-```
+```css
 @page {
   @top-right {
     background: url(kabisa-logo-two-color.svg) no-repeat bottom;
@@ -76,7 +76,7 @@ For example, the `@top-right` rule below specifies that the top-right part of th
 
 The `@bottom-right` rule below specifies that the bottom-right part of the margin of each page should display the page number and the total number of pages. The counters `page` and `pages` are available by default, but it’s also possible to define custom counters.
 
-```
+```css
 @page {
   @bottom-right {
     content: counter(page) " of " counter(pages);
@@ -89,7 +89,7 @@ The value of this string is updated each time an `h2` element is encountered.
 The property `page-break-before` is an example of a CSS property that most browsers do support.
 It is used to ensure that each `h2` element starts a new page.
 
-```
+```css
 @page {
   @bottom-center {
     content: string(heading);
@@ -114,7 +114,7 @@ Although there’s not a clear winner among these three for me personally, I dec
 
 If you’ve never heard about Markdown, consider the following document:
 
-```
+```md
 # Good-looking PDFs with CSS for Paged Media and Markdown
 
 Transforming your Markdown documents into good-looking,
@@ -130,7 +130,7 @@ such as [WeasyPrint](https://weasyprint.org/).
 
 Markdown converts this annotated text into the following HTML:
 
-```
+```html
 <h1>Good-looking PDFs with CSS for Paged Media and Markdown</h1>
 <p>
   Transforming your Markdown documents into good-looking,

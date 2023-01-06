@@ -20,7 +20,7 @@ The Python project I’m currently working on started before [data classes](http
 Additionally, this project is created for a client that prefers the use of as few dependencies as possible.
 In that context, the following class for points emerged:
 
-```
+```python
 from collections import namedtuple
 
 
@@ -38,7 +38,7 @@ This variant of the class extends a named tuple `_Point` consisting of two field
 
 When you try to mutate an instance of this class, you’ll be greeted with an `AttributeError`:
 
-```
+```python
 >>> from collections import namedtuple
 >>> Point = namedtuple("_Point", ["x", "y"])
 >>> p = Point(1, 2)
@@ -54,7 +54,7 @@ That looks pretty much like immutability to me.
 One of the downsides of this approach is that `p` isn’t an actual object.
 It’s a tuple.
 
-```
+```python
 >>> SomethingCompletelyDifferent = namedtuple("SomethingCompletelyDifferent", "a b")
 >>> a = SomethingCompletelyDifferent(1, 2)
 >>> p == a
@@ -70,7 +70,7 @@ The documentation for the [attrs](https://www.attrs.org/en/stable/index.html) pa
 
 If you don’t mind dependencies, you could use the aforementioned [attrs](https://www.attrs.org/en/stable/index.html) package and do this:
 
-```
+```python
 import attr
 
 
@@ -89,7 +89,7 @@ class Point:
 In this case, the decorator `@attr.s(frozen=True)` dictates that values of `x` and `y` cannot be changed by simple assignments.
 This behaves like you expect it to:
 
-```
+```python
 >>> import attr
 >>> @attr.s(frozen=True)
 ... class Point:
@@ -115,7 +115,7 @@ False
 
 You can still mutate instances of this class, but not by accident:
 
-```
+```python
 >>> p = Point(1, 2)
 >>> p.__dict__["x"] = 100
 >>> p
@@ -126,7 +126,7 @@ Point(x=100, y=2)
 
 Since Python 3.7, you can use [data classes](https://docs.python.org/3/library/dataclasses.html) to achieve something similar to the variant using [attrs](https://www.attrs.org/en/stable/index.html):
 
-```
+```python
 from dataclasses import dataclass
 
 
@@ -145,7 +145,7 @@ class Point:
 Here, the decorator `@dataclass(frozen=True)` dictates that the values of `x` and `y` cannot be changed by simple assignments.
 This also behaves like you would expect:
 
-```
+```python
 >>> from dataclasses import dataclass
 >>> @dataclass(frozen=True)
 ... class Point:

@@ -39,7 +39,7 @@ This state can be stored online and shared between developers.
 The module [azure_vm](https://github.com/ljpengelen/dokku-on-azure/blob/master/terraform/modules/azure_vm/main.tf) in the [repository accompanying this post](https://github.com/ljpengelen/dokku-on-azure) defines which infrastructure we want to set up on Azure to end up with a publicly accessible virtual machine running Ubuntu.
 Part of this module is shown below.
 
-```
+```hcl
 variable "admin_username" {}
 
 ...
@@ -102,7 +102,7 @@ For example, this means that when you connect to a remote machine running Ubuntu
 The installation and configuration process that Ansible is supposed to execute is described in the form of playbooks.
 A playbook consists of a number of roles and tasks, as shown below.
 
-```
+```yaml
 ---
 - hosts: dokku
   vars:
@@ -145,7 +145,7 @@ It is triggered by the presence of a file called `.static` in the root of the re
 To be able to clone the repository for this app before the initial push, this repository is initialized as part of the configuration with Ansible.
 This makes the initial deployment the same as all the following ones, which in turn simplifies setting up continuous deployment.
 
-```
+```yaml
 - name: Initialize repositories for static apps
   command: dokku git:initialize {{ item.name }}
   args:
@@ -157,7 +157,7 @@ This makes the initial deployment the same as all the following ones, which in t
 By default, the nginx buildpack serves files from the root of the repository.
 The following command executed by Ansible ensures that nginx uses the dist folder as root instead.
 
-```
+```yaml
 - name: Configure nginx for static apps
   command: dokku config:set {{ item.name }} NGINX_ROOT=dist
   when: item.static
@@ -166,7 +166,7 @@ The following command executed by Ansible ensures that nginx uses the dist folde
 
 By default, static apps are exposed on a random port after the first deployment. Specifying a fixed port is also part of the configuration with Ansible.
 
-```
+```yaml
 - name: Configure ports for static apps
   command: dokku proxy:ports-add {{ item.name }} http:{{ item.port }}:5000
   when: item.static
@@ -178,7 +178,7 @@ By default, Dokku looks in the root of this repository for the Dockerfile.
 To support monorepos and keep the root of the repository clean, we use the [dokku-dockerfile plugin](https://github.com/mimischi/dokku-dockerfile).
 This instructs Dokku to look for the Dockerfile in `dockerfiles/deploy`.
 
-```
+```yaml
 tasks:
 - name: Configure dokku-dockerfile plugin
   command: dokku dockerfile:set back-end dockerfiles/deploy/Dockerfile

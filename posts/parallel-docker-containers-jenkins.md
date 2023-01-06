@@ -18,7 +18,7 @@ However, I’d rather keep each app in its own Docker container and only have ap
 
 Consider the following Jenkinsfile:
 
-```
+```groovy
 def withDockerNetwork(Closure inner) {
   try {
     networkId = UUID.randomUUID().toString()
