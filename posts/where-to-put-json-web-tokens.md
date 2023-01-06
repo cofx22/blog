@@ -128,6 +128,13 @@ If you use secure, HTTP-only cookies, you don’t need to worry about XSS, howev
 because scripts don’t have access to the content of such cookies.
 There’s no way someone can abuse XSS and take your JWT to impersonate you.
 
+<i>
+Update 2023-01-06: Unfortunately, you </i>do<i> need to worry about XSS, even with secure, HTTP-only cookies.
+See the second addendum below to find out why.
+I'm leaving the rest of this post as it is because I don't want to rewrite history.
+However, I no longer agree with the conclusion at the end of this section and the final conclusion of this post.
+</i>
+
 If you put your JWTs in a header, you don’t need to worry about CSRF.
 You *do* need to worry about XSS, however.
 If someone can abuse XSS to steal your JWT, this person is able to impersonate you.
@@ -239,7 +246,13 @@ I’m well aware that the contradictory advice I encountered years ago is still 
 and that most people put their JWTs in a header.
 I guess those people are more scared of CSRF and that I’m more afraid of XSS.
 
+<i>
+Update 2023-01-06: As mentioned above, my opinion about where to put JWTs has changed.
+The second addendum below explains why.
+</i>
+
 ## Addendum
+
 Right after this blog post got published, my colleague [Luk van den Borne](https://github.com/lukvdborne) shared a post about [securing cookies with cookie prefixes](https://www.sjoerdlangkemper.nl/2017/02/09/cookie-prefixes/).
 Coincidentally, that post describes a way to patch one of the security holes in the JWT-based back end.
 This back end is vulnerable for an attack called [login CSRF](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html#login-csrf),
@@ -251,3 +264,14 @@ because the CSRF token is tied to the user’s account identifier after logging 
 
 Simply adding the prefix `__Host-` to the name of the cookie that holds the CSRF token triggers browser behavior that mitigates this type of attack,
 at least for users of Chrome and Firefox.
+
+## Second addendum
+
+While copying the [original version of this blog post](https://www.kabisa.nl/tech/where-to-put-json-web-tokens-in-2019/) from Kabisa's Tech Blog,
+I first noticed a comment by Dmytro Lapshyn that triggered me to reconsider the conclusion of this post.
+It turns out that the following statement made above is not completely true:
+
+> "If you use secure, HTTP-only cookies, you don’t need to worry about XSS, however, because scripts don’t have access to the content of such cookies.
+There’s no way someone can abuse XSS and take your JWT to impersonate you."
+
+It's true that no one can use XSS to take your JWT from a secure, HTTP-only cookie and use it to impersonate you.
