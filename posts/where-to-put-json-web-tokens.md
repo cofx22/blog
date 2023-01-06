@@ -113,7 +113,7 @@ The term cross-site scripting (XSS) is used for the situation where someone is a
 
 The following example (directly stolen from [OWASP](https://www.owasp.org/index.php/Cross-site_Scripting_(XSS)) without any extra effort) shows part of a JSP template that allows anyone to execute code on the corresponding web page:
 
-```jsp
+```java
 <% String eid = request.getParameter("eid"); %>
 	...
 	Employee ID: <%= eid %>
