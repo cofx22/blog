@@ -165,7 +165,7 @@ Additionally, if you use a framework such as Spring Boot, you have to define [da
 With protocol buffers, these are generated for you.
 
 | Number of vectors | JSON  | Compressed JSON  | Protocol Buffers |
-| -: | -: | -: | -: |
+| ----------------: | ----: | ---------------: | ---------------: |
 | 1.000             | 156   | 59               | 59               |
 | 10.000            | 1.520 | 576              | 586              |
 | 100.000           | 15.220| 5.600            | 5.720            |
@@ -185,7 +185,7 @@ With gRPC, data is always represented as protocol buffers.
 The two columns labelled “gRPC” show how much time it takes to transfer multiple vectors as a list and as a stream.
 
 | Client    | Server    | REST JSON | REST Protobuf | gRPC List | gRPC Stream |
-| :- | :- | -: | -: | -: | -: |
+| :-------- | :-------- | --------: | ------------: | --------: | ----------: |
 | Eindhoven | Eindhoven | 326       | 77            | 118       | 1.764       |
 | Eindhoven | Frankfurt | 883       | 665           | 1.689     | 2.430       |
 | Eindhoven | Sydney    | 16.161    | 11.658        | 55.457    | 57.537      |
