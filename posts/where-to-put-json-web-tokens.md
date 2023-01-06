@@ -99,7 +99,7 @@ Before we can discuss the conclusion I reached back then, we need to take a deto
 
 The term cross-site request forgery (CSRF) is used for the situation where someone else’s web application secretly lets its visitors perform actions with your web application due to cookies still present from previous visits.
 
-The following example (a modified version of one provided by [OWASP](https://www.owasp.org/index.php/Cross-Site_Request_Forgery_(CSRF))) shows a form that tricks unsuspecting users into sending 10.000 euro (?) to my bank account at <http://bank.com>:
+The following example (a modified version of one provided by [OWASP](https://owasp.org/www-community/attacks/csrf)) shows a form that tricks unsuspecting users into sending 10.000 euro (?) to my bank account at <http://bank.com>:
 
 ```html
 <form action="http://bank.com/transfer.do" method="POST">
