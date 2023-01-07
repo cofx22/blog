@@ -267,11 +267,30 @@ at least for users of Chrome and Firefox.
 
 ## Second addendum
 
-While copying the [original version of this blog post](https://www.kabisa.nl/tech/where-to-put-json-web-tokens-in-2019/) from Kabisa's Tech Blog,
-I first noticed a comment by Dmytro Lapshyn that triggered me to reconsider the conclusion of this post.
+While copying the [original version of this blog post](https://www.kabisa.nl/tech/where-to-put-json-web-tokens-in-2019/) from Kabisa's Tech Blog on 2023-01-06,
+I noticed a comment by Dmytro Lapshyn that triggered me to reconsider the conclusion of this post.
 It turns out that the following statement made above is not completely true:
 
 > "If you use secure, HTTP-only cookies, you don’t need to worry about XSS, however, because scripts don’t have access to the content of such cookies.
 There’s no way someone can abuse XSS and take your JWT to impersonate you."
 
 It's true that no one can use XSS to take your JWT from a secure, HTTP-only cookie and use it to impersonate you.
+Unfortunately, that doesn't mean that you don't have to worry about XSS.
+
+Later on in the post above, the following statement is made:
+
+> "More realistically, however, it could happen that you inadvertently introduce an XSS vulnerability in your app.
+This could enable an attacker to access the value of the CSRF token, and use it in a CSRF attack."
+
+At the time of writing, my reasoning was that someone else getting their hands on a JWT would be worse than someone getting their hands on an anti-CSRF token.
+A JWT can be used to impersonate the person for which it was issued.
+You can't do that with an anti-CSRF token by itself.
+However, if that anti-CSRF token is obtained via XSS or any other way of injecting and executing arbitrary JavaScript, then it's also possible to use JavaScript to perform HTTP requests that include both the anti-CRSF token and the cookie containing the JWT.
+Even without obtaining the JWT itself, the same kind of abuse is possible.
+
+In conclusion, it's not worth going through all the extra trouble to pass JWTs along in cookies.
+
+It's good to know that the more complicated approach has no benefits over the simpler approach.
+It's less reassuring that XSS or some other way of injecting and executing arbitrary JavaScript opens up the possibility of this kind of abuse.
+Keeping an eye on your own code is one thing.
+Keeping a close eye on your dependencies and their dependencies is another story.
