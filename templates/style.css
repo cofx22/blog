@@ -1,23 +1,60 @@
+* {
+  box-sizing: border-box;
+}
+
+html {
+  width: 100%;
+}
+
 body {
-  /* borrowed from metaredux.com */
-  font: 400 16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol";
+  color: rgb(51, 65, 85);
+  font-family: -apple-system, BlinkMacSystemFont, avenir next, avenir, segoe ui, helvetica neue, helvetica, Cantarell, Ubuntu, roboto, noto, arial, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
   margin: 0;
   padding: 0;
-  color: rgb(51, 65, 85)
+  width: 100%;
+}
+
+.header {
+  align-items: center;
+  border-bottom: 1px solid #e8e8e8;
+  display:flex;
+  flex-direction: column;
+}
+
+.header h1 {
+  margin: 2rem 0 1rem;
+}
+
+.site-nav {
+  display: flex;
+  flex: none;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.page-link {
+  text-decoration: none;
+  vertical-align: middle;
+}
+
+.wrapper {
+  max-width: 50rem;
+  margin: 0 auto;
+  padding: 0 1rem;
 }
 
 h1, h2, h3 {
   font-weight: 800;
 }
 
-a {
-  color: rgb(51, 65, 85)
+h1 {
+  font-size: 1.75rem;
 }
 
-.wrapper {
-  max-width: 800px;
-  margin: 0 auto 0 auto;
-  padding: 0 15px;
+a {
+  color: rgb(51, 65, 85)
 }
 
 h2 {
@@ -27,35 +64,6 @@ h2 {
 
 p {
   margin-top: 0.2em;
-}
-
-.site-header {
-  border-top: 2px solid #424242;
-  border-bottom: 1px solid #e8e8e8;
-  min-height: 55.95px;
-  position: relative;
-}
-
-.site-title {
-  margin: 0;
-}
-
-.site-nav {
-  float: right;
-  line-height: 4rem;
-}
-
-.site-nav .page-link:not(:last-child) {
-  margin-right: 20px;
-}
-
-.page-link {
-  text-decoration: none;
-  vertical-align: middle;
-}
-
-.page-icon {
-  vertical-align: middle;
 }
 
 ul.index {
@@ -89,4 +97,9 @@ th:last-child, td:last-child {
 
 table {
   margin-bottom: 1rem;
+}
+
+code[class*=language-] {
+  font-family: Menlo, Consolas, Monaco, Liberation Mono, Lucida Console, monospace;
+  font-size: 0.875rem;
 }

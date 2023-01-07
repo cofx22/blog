@@ -5,7 +5,6 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link type="application/atom+xml" rel="alternate" href="{{relative-path | safe}}atom.xml" title="{{title}}">
-    <link rel="stylesheet" href="{{relative-path | safe}}style.css">
     {% if canonical-url %}
       <link rel="canonical" href="{{canonical-url}}">
     {% endif %}
@@ -13,6 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/plugins/autoloader/prism-autoloader.min.js"></script>
     {{watch | safe }}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/themes/prism.min.css">
+    <link rel="stylesheet" href="{{relative-path | safe}}style.css">
 
     {% if favicon-tags %}{{favicon-tags | safe}}{% endif %}
 
@@ -45,32 +45,14 @@
     {% endif %}
   </head>
   <body>
-    <div class="site-header">
-      <div class="wrapper">
-        <div class="site-nav">
-          <a class="page-link" href="{{relative-path | safe}}archive.html">Archive</a>
-          <a class="page-link" href="{{relative-path | safe}}tags/index.html">Tags</a>
-          {% if discuss-link %}
-            <a class="page-link" href="{{discuss-link}}">Discuss</a>
-          {% endif %}
-          <a class="page-link" href="{{relative-path | safe}}atom.xml">
-            Feed
-          </a>
-          {% if twitter-handle %}
-            <a class="page-link" href="https://twitter.com/{{twitter-handle}}">
-              Twitter
-            </a>
-          {% endif %}
-          {% if about-link %}
-            <a class="page-link" href="{{about-link}}">About</a>
-          {% endif %}
-        </div>
-        <div>
-          <h1 class="site-title">
-            <a class="page-link" href="{{relative-path | safe}}index.html">{{blog-title}}</a>
-          </h1>
-          <p>{{blog-description}}</p>
-        </div>
+    <div class="header">
+      <h1 class="site-title">
+        <a class="page-link" href="{{relative-path | safe}}index.html">{{blog-title}}</a>
+      </h1>
+      <div class="site-nav">
+        <a class="page-link" href="{{relative-path | safe}}archive.html">Archive</a>
+        <a class="page-link" href="{{relative-path | safe}}tags/index.html">Tags</a>
+        <a class="page-link" href="{{relative-path | safe}}atom.xml">Feed</a>
       </div>
     </div>
     <div class="wrapper">
