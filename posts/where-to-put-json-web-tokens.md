@@ -17,8 +17,8 @@ Before we go into the details, we should first discuss the basics.
 
 Essentially, a JSON Web Token is something that a server application would give to a client application, which the client would then use to authenticate itself with the server when doing requests. A JSON Web Token looks something like this:
 
-<strong style="word-break: break-all">
-<span style="color: red">eyJhbGciOiJIUzUxMiJ9</span>.<span style="color: fuchsia">eyJleHAiOjE0NzYyOTAxNDksInN1YiI6IjEifQ</span>.<span style="color: blue">mvJEWu3kxm0WSUKu-qEVTBmuelM-2Te-VJHEFclVt_uR89ya0hNawkrgftQbAd-28lycLX2jXCgOGrA3XRg9Jg</span>
+<strong class="word-break-break-all">
+<span class="red">eyJhbGciOiJIUzUxMiJ9</span>.<span class="fuchsia">eyJleHAiOjE0NzYyOTAxNDksInN1YiI6IjEifQ</span>.<span class="blue">mvJEWu3kxm0WSUKu-qEVTBmuelM-2Te-VJHEFclVt_uR89ya0hNawkrgftQbAd-28lycLX2jXCgOGrA3XRg9Jg</span>
 </strong>
 
 If you look closely, you’ll see that it consists of three base64-encoded strings, joined by periods.
