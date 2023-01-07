@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Browser beats II: synthesizing a snare drum and a hi-hat</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link type="application/atom+xml" rel="alternate" href="atom.xml" title="Browser beats II: synthesizing a snare drum and a hi-hat">
+    
+      <link rel="canonical" href="https://www.kabisa.nl/tech/browser-beats-ii-synthesizing-a-snare-drum-and-a-hi-hat">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/themes/prism.min.css">
+    <link rel="stylesheet" href="style.css">
+
+    
+
+    <meta name="title" content="Browser beats II: synthesizing a snare drum and a hi-hat">
+    <meta name="twitter:title" content="Browser beats II: synthesizing a snare drum and a hi-hat">
+    <meta property="og:title" content="Browser beats II: synthesizing a snare drum and a hi-hat">
+    <meta property="og:type" content="website">
+    
+    
+      <meta name="twitter:url" content="https://blog.cofx.nl/browser-beats-snare-and-hi-hat.html">
+      <meta property="og:url" content="https://blog.cofx.nl/browser-beats-snare-and-hi-hat.html">
+    
+    
+      <meta name="twitter:card" content="summary">
+    
+    
+    
+  </head>
+  <body>
+    <div class="header">
+      <h1 class="site-title">
+        <a class="page-link" href="index.html">BBC: blog by cofx</a>
+      </h1>
+      <div class="site-nav">
+        <a class="page-link" href="archive.html">Archive</a>
+        <a class="page-link" href="tags/index.html">Tags</a>
+        <a class="page-link" href="atom.xml">Feed</a>
+      </div>
+    </div>
+    <div class="wrapper">
+      <h1>
+  
+  Browser beats II: synthesizing a snare drum and a hi-hat
+  
+</h1>
+<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>In the previous installment of browser beats, we used the <a href='https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API'>Web Audio API</a> to synthesize a kick drum. This time, we’ll look at snares and hi-hats. Once you know how to synthesize kicks, snares and hi-hats are not far away.</p><h2>Snare</h2><p>The snare sound we’ll synthesize consists of two components. One component represents the vibrating skins of the snare drum, the other represents the vibrating snares. For the first component, we’ll use two sine-like waves, one at 185Hz and the other at 349Hz. I took these values from a <a href='https://www.musictech.net/tutorials/modular-eurorack-snare-tutorial/'>MusicTech tutorial</a>. An article in <a href='https://www.soundonsound.com/techniques/practical-snare-drum-synthesis'>Sound on Sound</a> mentions 180Hz and 330Hz. Obviously, you should go with whatever frequencies sound best to you.</p><pre><code class="lang-JavaScript">const playSnare = &#40;&#41; =&gt; {
+    const lowTriangle = audioContext.createOscillator&#40;&#41;;
+    lowTriangle.type = 'triangle';
+    lowTriangle.frequency.value = 185;
+
+    const highTriangle = audioContext.createOscillator&#40;&#41;;
+    highTriangle.type = 'triangle';
+    highTriangle.frequency.value = 349;
+
+    const lowWaveShaper = audioContext.createWaveShaper&#40;&#41;;
+    lowWaveShaper.curve = distortionCurve&#40;5&#41;;
+
+    const highWaveShaper = audioContext.createWaveShaper&#40;&#41;;
+    highWaveShaper.curve = distortionCurve&#40;5&#41;;
+
+    const lowTriangleGainNode = audioContext.createGain&#40;&#41;;
+    lowTriangleGainNode.gain.value = 1;
+    lowTriangleGainNode.gain.linearRampToValueAtTime&#40;0, audioContext.currentTime + 0.1&#41;
+
+    const highTriangleGainNode = audioContext.createGain&#40;&#41;;
+    highTriangleGainNode.gain.value = 1;
+    highTriangleGainNode.gain.linearRampToValueAtTime&#40;0, audioContext.currentTime + 0.1&#41;
+
+    const snareGainNode = audioContext.createGain&#40;&#41;;
+    snareGainNode.gain.value = 1;
+
+    lowTriangle.connect&#40;lowWaveShaper&#41;;
+    lowWaveShaper.connect&#40;lowTriangleGainNode&#41;;
+    lowTriangleGainNode.connect&#40;snareGainNode&#41;;
+    snareGainNode.connect&#40;audioContext.destination&#41;;
+
+    highTriangle.connect&#40;highWaveShaper&#41;;
+    highWaveShaper.connect&#40;highTriangleGainNode&#41;;
+    highTriangleGainNode.connect&#40;snareGainNode&#41;;
+
+    lowTriangle.start&#40;audioContext.currentTime&#41;;
+    lowTriangle.stop&#40;audioContext.currentTime + 1&#41;;
+
+    highTriangle.start&#40;audioContext.currentTime&#41;;
+    highTriangle.stop&#40;audioContext.currentTime + 1&#41;;
+};
+</code></pre><p>Together, these two sound like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/snare-and-hihat/audio/sines.mp3"></audio></p><p>We could have used pure sines waves here. There’s no need for applying the trick we used for the kick drum. What you’re witnessing here is a sheer waste of processing power due to my unwillingness to refactor this code right now. Let’s just say that I like the slightly more metallic sound of the distorted traingle waves.</p><p>We’ll use white noise again to represent the second component. This time, we’ll use a filter to cut of all frequencies below 2kHz.</p><pre><code class="lang-JavaScript">const playSnare = &#40;&#41; =&gt; {
+
+    ...
+
+    const noise = whiteNoiseBufferSource&#40;&#41;;
+
+    const noiseGainNode = audioContext.createGain&#40;&#41;;
+    noiseGainNode.gain.value = 1;
+    noiseGainNode.gain.linearRampToValueAtTime&#40;0, audioContext.currentTime + 0.2&#41;;
+
+    const noiseFilter = audioContext.createBiquadFilter&#40;&#41;;
+    noiseFilter.type = 'highpass';
+    noiseFilter.frequency.value = 2000;
+
+    noise.connect&#40;noiseGainNode&#41;;
+    noiseGainNode.connect&#40;noiseFilter&#41;;
+    noiseFilter.connect&#40;snareGainNode&#41;;
+
+    noise.start&#40;audioContext.currentTime&#41;;
+    noise.stop&#40;audioContext.currentTime + 1&#41;;
+};
+</code></pre><p>The filtered noise sounds like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/snare-and-hihat/audio/snare-noise.mp3"></audio></p><p>Finally, the distorted sines and the noise together sound like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/snare-and-hihat/audio/snare.mp3"></audio></p><h2>Hi-hat</h2><p>Some filtered white noise is all you need for a hi-hat. We again cut all frequencies below 2kHz. This time, the volume should fade to zero in 100 milliseconds.</p><pre><code class="lang-JavaScript">const playHiHat = &#40;&#41; =&gt; {
+    const noise = whiteNoiseBufferSource&#40;&#41;;
+
+    const noiseGainNode = audioContext.createGain&#40;&#41;;
+    noiseGainNode.gain.value = 1;
+    noiseGainNode.gain.setValueAtTime&#40;1, audioContext.currentTime + 0.001&#41;;
+    noiseGainNode.gain.linearRampToValueAtTime&#40;0, audioContext.currentTime + 0.1&#41;;
+
+    const noiseFilter = audioContext.createBiquadFilter&#40;&#41;;
+    noiseFilter.type = 'highpass';
+    noiseFilter.frequency.value = 2000;
+
+    const hiHatGainNode = audioContext.createGain&#40;&#41;;
+    hiHatGainNode.gain.value = 0.3;
+
+    noise.connect&#40;noiseGainNode&#41;;
+    noiseGainNode.connect&#40;noiseFilter&#41;;
+    noiseFilter.connect&#40;hiHatGainNode&#41;;
+    hiHatGainNode.connect&#40;audioContext.destination&#41;;
+
+    hiHatGainNode.connect&#40;analyser&#41;
+
+    noise.start&#40;audioContext.currentTime&#41;;
+    noise.stop&#40;audioContext.currentTime + 1&#41;;
+};
+</code></pre><p>The end result sounds like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/snare-and-hihat/audio/hihat-noise.mp3"></audio></p><h2>Conclusion</h2><p>The snare and hi-hat we’ve produced here are pretty basic. If you want to dig deeper to achieve prettier or more realistic results, the following articles would be good starting points:</p><ul><li><a href='https://www.soundonsound.com/techniques/practical-snare-drum-synthesis'>https://www.soundonsound.com/techniques/practical-snare-drum-synthesis</a></li><li><a href='https://www.soundonsound.com/techniques/practical-cymbal-synthesis'>https://www.soundonsound.com/techniques/practical-cymbal-synthesis</a></li></ul><p>Don’t forget to put these sounds to the test by playing along with your favorite songs: <a href='https://ljpengelen.github.io/groovid19/kick-snare-hihat.html'>https://ljpengelen.github.io/groovid19/kick-snare-hihat.html</a>.</p>
+
+<p>
+  <i>Published: 2020-05-25</i>
+  
+</p>
+
+<p>
+  <i>
+  Tagged:
+  
+  <span class="tag">
+    <a href="tags/Browser-beats.html">Browser beats</a>
+  </span>
+  
+  </i>
+</p>
+
+
+    </div>
+  </body>
+</html>

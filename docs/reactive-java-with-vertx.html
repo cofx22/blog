@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Reactive Java using the Vert.x toolkit</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link type="application/atom+xml" rel="alternate" href="atom.xml" title="Reactive Java using the Vert.x toolkit">
+    
+      <link rel="canonical" href="https://www.kabisa.nl/tech/reactive-java-using-the-vert-x-toolkit">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/themes/prism.min.css">
+    <link rel="stylesheet" href="style.css">
+
+    
+
+    <meta name="title" content="Reactive Java using the Vert.x toolkit">
+    <meta name="twitter:title" content="Reactive Java using the Vert.x toolkit">
+    <meta property="og:title" content="Reactive Java using the Vert.x toolkit">
+    <meta property="og:type" content="website">
+    
+    
+      <meta name="twitter:url" content="https://blog.cofx.nl/reactive-java-with-vertx.html">
+      <meta property="og:url" content="https://blog.cofx.nl/reactive-java-with-vertx.html">
+    
+    
+      <meta name="twitter:card" content="summary">
+    
+    
+    
+  </head>
+  <body>
+    <div class="header">
+      <h1 class="site-title">
+        <a class="page-link" href="index.html">BBC: blog by cofx</a>
+      </h1>
+      <div class="site-nav">
+        <a class="page-link" href="archive.html">Archive</a>
+        <a class="page-link" href="tags/index.html">Tags</a>
+        <a class="page-link" href="atom.xml">Feed</a>
+      </div>
+    </div>
+    <div class="wrapper">
+      <h1>
+  
+  Reactive Java using the Vert.x toolkit
+  
+</h1>
+<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p><a href='https://vertx.io/'>Vert.x</a> is a toolkit for developing reactive applications on the JVM. Although it’s possible to use Vert.x with many different languages (Java, JavaScript, Groovy, Ruby, Ceylon, Scala and Kotlin), this post will use plain old Java.</p><p>The Reactive Manifesto states that reactive systems are:</p><ul><li>responsive,</li><li>resilient,</li><li>elastic, and</li><li>message driven.</li></ul><p>Before we consider what that means in the context of Vert.x, let’s look at one of the simplest possible applications using Vert.x:</p><pre><code class="lang-java">package nl.kabisa.vertx;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Vertx;
+import io.vertx.core.http.HttpServerOptions;
+
+public class Application {
+
+    private static class HelloWorldVerticle extends AbstractVerticle {
+
+        @Override
+        public void start&#40;&#41; {
+            var options = new HttpServerOptions&#40;&#41;.setPort&#40;8080&#41;;
+            vertx.createHttpServer&#40;options&#41;
+                    .requestHandler&#40;request -&gt; request.response&#40;&#41;.end&#40;&quot;Hello world&quot;&#41;&#41;
+                    .listen&#40;&#41;;
+        }
+    }
+
+    public static void main&#40;String&#91;&#93; args&#41; {
+        Vertx.vertx&#40;&#41;.deployVerticle&#40;new HelloWorldVerticle&#40;&#41;&#41;;
+    }
+}
+</code></pre><p>When running this application, a single verticle is deployed when the statement <code class="language-java">Vertx.vertx().deployVerticle(new HelloWorldVerticle());</code> is executed. This verticle is an instance of the class <code>HelloWorldVerticle</code>. Each verticle has a <code>start</code> and a <code>stop</code> method. The <code>start</code> method is called when the verticle is deployed, and the <code>stop</code> method is called when the verticle is undeployed. In this example, we only provide an implementation for the <code>start</code> method and reuse the (empty) <code>stop</code> method of the class <code>AbstractVerticle</code>. When an instance of <code>HelloworldVerticle</code> is deployed, an HTTP server is created, which listens for incoming requests on port 8080. Each request is answered with the plain-text response “Hello world”.</p><h2>Responsive</h2><p>By default, Vert.x creates two threads per CPU core to deploy verticles like the one above. Each verticle is assigned to a specific thread, and all handlers of that verticle are executed on that thread sequentially. For the example above, this means that the handler <code class="language-java">request -> request.response().end("Hello world")</code> is always executed on the same thread.</p><p>Because the handlers for a given verticle are never executed concurrently, you don’t have to worry about locking or the atomicity of actions relevant for a single verticle. Multiple instances of the same verticle, however, <em>can</em> have their handlers executed at the same time. In fact, this holds for any two verticles. This means that if two verticles share a resource, you might still have to worry about concurrent access to that resource.</p><p>It’s your responsibility as a developer to ensure that a handler cannot occupy its assigned thread for too long. If you block a thread for too long, Vert.x will log a warning. The Vert.x developers took at it as their responsibility to ensure that no Vert.x API call will block a thread. As a result, a well-designed Vert.x application can handle a large amount of events using only a few threads, ultimately making such an application <em>responsive</em>.</p><h2>Message driven and resilient</h2><p>The example below shows an application consisting of two verticles. It illustrates Vert.x’s event bus. The event bus allows you to broadcast messages to any number of interested receivers as well as send messages to a single receiver. The broadcasted messages end up at each of the receivers registered for an address, whereas the messages sent directly end up at a single receiver.</p><p>In the example below, instances of the <code>WorldVerticle</code> are registered as consumers on the address <code>WORLD</code>. Instances of the <code>HelloVerticle</code> send messages to this address. If we would deploy multiple <code>WordVerticles</code>, each of them would receive messages in turn.</p><p>It’s possible to send messages in a number of different forms, including strings, booleans, JSON objects, and JSON arrays. Vert.x best-effort delivery, which means that message can get lost, but are never thrown away intentionally.</p><pre><code class="lang-java">package nl.kabisa.vertx;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Vertx;
+import io.vertx.core.http.HttpServerOptions;
+
+public class Application {
+
+    private static class HelloVerticle extends AbstractVerticle {
+
+        @Override
+        public void start&#40;&#41; {
+            var options = new HttpServerOptions&#40;&#41;.setPort&#40;8080&#41;;
+            vertx.createHttpServer&#40;options&#41;
+                    .requestHandler&#40;request -&gt;
+                            vertx.eventBus&#40;&#41;.send&#40;&quot;WORLD&quot;, &quot;Hello&quot;, ar -&gt; {
+                                if &#40;ar.succeeded&#40;&#41;&#41; {
+                                    request.response&#40;&#41;.end&#40;&#40;String&#41; ar.result&#40;&#41;.body&#40;&#41;&#41;;
+                                } else {
+                                    request.response&#40;&#41;.setStatusCode&#40;500&#41;.end&#40;ar.cause&#40;&#41;.getMessage&#40;&#41;&#41;;
+                                }
+                            }&#41;&#41;
+                    .listen&#40;&#41;;
+        }
+    }
+
+    private static class WorldVerticle extends AbstractVerticle {
+
+        @Override
+        public void start&#40;&#41; {
+            vertx.eventBus&#40;&#41;.consumer&#40;&quot;WORLD&quot;, event -&gt; event.reply&#40;event.body&#40;&#41; + &quot; world&quot;&#41;&#41;;
+        }
+    }
+
+    public static void main&#40;String&#91;&#93; args&#41; {
+        var vertx = Vertx.vertx&#40;&#41;;
+        vertx.deployVerticle&#40;new WorldVerticle&#40;&#41;&#41;;
+        vertx.deployVerticle&#40;new HelloVerticle&#40;&#41;&#41;;
+    }
+}
+</code></pre><p>The example shows that the sender of a message can specify an optional reply handler. The reply is provided to the handler in the form of an asynchronous result, which can either be succeeded or failed. If it succeeded, the actual reply message is available (<code class="language-java">ar.result()</code>, as shown in the example). Otherwise, a throwable is available that indicates what went wrong (<code class="language-java">ar.cause()</code>, also shown in the example).</p><p>I probably don’t need to tell you that this covers the <em>message driven</em> part of the Reactive Manifesto. Clearly, verticles can communicate via asynchronous message passing.</p><p>In a way, the example also illustrates <em>resilience</em>. If we would deploy multiple <code>WorldVerticles</code> and one of them would fail, the others would just keep on doing their jobs on their own thread. Additionally, the example shows how Vert.x reminds you to think about gracefully handling failure when implementing a handler. Many handlers receive their input in the form of an asynchronous result, which can always be succeeded or failed, as discussed above. Finally, and perhaps paradoxically, because of the best-effort delivery of messages via the event bus, you’re also forced to consciously deal with failure related to lost messages. If it’s paramount that a given type of message is always processed, you need to implement acknowledgements and retries.</p><h2>Elasticity</h2><p>As mentioned above, Vert.x creates two threads per available CPU core to deploy verticles like the ones shown above. If you need to handle more events (such as HTTP requests, for example), you can run your app on a machine with more CPU cores and reap the benefits of more concurrency, without any additional programming or configuration changes. Additionally, it’s possible to scale individual components of your application by simply deploying more or fewer verticles of a certain type. That sounds pretty <em>elastic</em> to me.</p><h2>Let’s go overboard 🚢</h2><p>If you have experience with callback-based asynchronous programming, you’ve probably also heard of callback hell. Callback hell is the term used to describe the type of programs that slowly but surely move to the right-hand side of your screen, where you’re dealing with callbacks inside callbacks, inside callbacks, inside callbacks, etc.</p><p>Take the following TCP client for example:</p><pre><code class="lang-java">package nl.kabisa.vertx.tcp;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import com.google.common.primitives.Bytes;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.buffer.Buffer;
+import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.eventbus.Message;
+import io.vertx.core.json.JsonObject;
+import io.vertx.core.net.NetClient;
+
+public class TcpClientVerticle extends AbstractVerticle {
+
+    public static final String REQUEST&#95;ADDRESS = &quot;tcp.client.request&quot;;
+
+    private static final Logger LOGGER = LogManager.getLogger&#40;&#41;;
+
+    private EventBus eventBus;
+    private NetClient authClient;
+    private NetClient echoClient;
+
+    private void handleEvent&#40;Message&lt;JsonObject&gt; event&#41; {
+        authClient.connect&#40;3001, &quot;localhost&quot;, asyncAuthSocket -&gt; {
+            if &#40;asyncAuthSocket.succeeded&#40;&#41;&#41; {
+                var authSocket = asyncAuthSocket.result&#40;&#41;;
+                authSocket.handler&#40;authBuffer -&gt; {
+                    if &#40;authBuffer.getByte&#40;0&#41; == 0&#41; {
+                        event.fail&#40;0, &quot;Invalid credentials&quot;&#41;;
+                    } else if &#40;authBuffer.getByte&#40;0&#41; == 2&#41; {
+                        event.fail&#40;0, &quot;Unexpected error&quot;&#41;;
+                    } else if &#40;authBuffer.getByte&#40;0&#41; == 1&#41; {
+                        var id = authBuffer.getBytes&#40;1, authBuffer.length&#40;&#41;&#41;;
+
+                        echoClient.connect&#40;3002, &quot;localhost&quot;, asyncEchoSocket -&gt; {
+                            if &#40;asyncEchoSocket.succeeded&#40;&#41;&#41; {
+                                var echoSocket = asyncEchoSocket.result&#40;&#41;;
+                                echoSocket.handler&#40;echoBuffer -&gt; {
+                                    if &#40;echoBuffer.getByte&#40;0&#41; == 0&#41; {
+                                        event.fail&#40;500, &quot;Unauthenticated&quot;&#41;;
+                                    } else if &#40;echoBuffer.getByte&#40;0&#41; == 1&#41; {
+                                        event.reply&#40;echoBuffer.getBuffer&#40;1, echoBuffer.length&#40;&#41;&#41;&#41;;
+                                    } else {
+                                        event.fail&#40;500, &quot;Unexpected response from echo service&quot;&#41;;
+                                    }
+                                }&#41;;
+                                echoSocket.write&#40;Buffer.buffer&#40;Bytes.concat&#40;id, event.body&#40;&#41;.getString&#40;&quot;body&quot;&#41;.getBytes&#40;&#41;&#41;&#41;&#41;;
+                            } else {
+                                String errorMessage = &quot;Unable to obtain socket for echo service&quot;;
+                                LOGGER.error&#40;errorMessage, asyncEchoSocket.cause&#40;&#41;&#41;;
+                                event.fail&#40;500, errorMessage&#41;;
+                            }
+                        }&#41;;
+                    } else {
+                        event.fail&#40;500, &quot;Unexpected response from authentication service&quot;&#41;;
+                    }
+                }&#41;;
+                authSocket.write&#40;Buffer.buffer&#40;new byte&#91;&#93; { 1, 2, 3, 4 }&#41;&#41;;
+            } else {
+                String errorMessage = &quot;Unable to obtain socket for authentication service&quot;;
+                LOGGER.error&#40;errorMessage, asyncAuthSocket.cause&#40;&#41;&#41;;
+                event.fail&#40;500, errorMessage&#41;;
+            }
+        }&#41;;
+    }
+
+    @Override
+    public void start&#40;&#41; {
+        LOGGER.info&#40;&quot;Starting&quot;&#41;;
+
+        eventBus = vertx.eventBus&#40;&#41;;
+        authClient = vertx.createNetClient&#40;&#41;;
+        echoClient = vertx.createNetClient&#40;&#41;;
+
+        eventBus.consumer&#40;REQUEST&#95;ADDRESS, this::handleEvent&#41;;
+    }
+}
+</code></pre><p>This verticle listens for messages on the address <code>tcp.client.request</code>. Each time a message arrives, the verticle authenticates itself with some service listening on port 3001 by exchanging some bytes. It uses the token it receives to communicate with some other service listening on port 3002. In the end, it replies to the initial message with a buffer containing an array of bytes received from the service listening on port 3002. You could argue that this isn’t the most beautiful piece of code ever written, although beauty lies in the eyes of the beholder.</p><p>(If you want to see the callback-based implementation of the rest of this application, by my guest: <a href="https://github.com/ljpengelen/vertx-demo/tree/971e33e4475a18fb7239d716a8c6d05369442b8a">https://github.com/ljpengelen/vertx-demo/tree/971e33e4475a18fb7239d716a8c6d05369442b8a</a>.)</p><h2>Futures</h2><p>JavaScript’s answer to callback hell were promises. Vert.x’s answer to callback hell are futures. A future represents the result of some computation that is potentially available at some later stage. A future can either succeed or fail. When it succeed, its result will be available. When it fails, a throwable representing the cause of failure will be available. You can set a handler for a future, which will be called with the asynchronous result when the future has succeeded or failed. There are different ways to combine futures into a single future, which we’ll illustrate with an example.</p><p>Suppose you want to deploy a number of verticles, and some of these verticles should only be deployed once others have been deployed successfully. Vert.x offers a deploy method with a callback, which is called when the deployment has finished. Without the use of futures, you could end up with code like this:</p><pre><code class="lang-java">package nl.kabisa.vertx;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import io.vertx.core.Vertx;
+import nl.kabisa.vertx.http.HttpServerVerticle;
+import nl.kabisa.vertx.tcp.&#42;;
+
+public class Application {
+
+    private static final Logger LOGGER = LogManager.getLogger&#40;&#41;;
+
+    private static Vertx vertx;
+
+    public static void main&#40;String&#91;&#93; args&#41; {
+        vertx = Vertx.vertx&#40;&#41;;
+
+        vertx.deployVerticle&#40;new AuthServiceVerticle&#40;&#41;, authServiceDeployment -&gt; {
+            if &#40;authServiceDeployment.succeeded&#40;&#41;&#41; {
+                vertx.deployVerticle&#40;new ScreamingEchoServiceVerticle&#40;&#41;, screamingEchoServiceDeployment -&gt; {
+                    if &#40;screamingEchoServiceDeployment.succeeded&#40;&#41;&#41; {
+                        vertx.deployVerticle&#40;new TcpClientVerticle&#40;&#41;, tcpClientDeployment -&gt; {
+                            if &#40;tcpClientDeployment.succeeded&#40;&#41;&#41; {
+                                vertx.deployVerticle&#40;new HttpServerVerticle&#40;&#41;, httpServerDeployment -&gt;
+                                    LOGGER.info&#40;&quot;All verticles started successfully&quot;&#41;&#41;;
+                            }
+                        }&#41;;
+                    }
+                }&#41;;
+            }
+        }&#41;;
+    }
+}
+</code></pre><p>This isn’t pretty at all, even without the additional code you need to deal with possible failures. Also, we’re deploying the verticles one at a time, while we actually want to deploy the <code>HttpServerVerticle</code> once the others have been deployed successfully.</p><p>Rewriting this example using futures leads to the following:</p><pre><code class="lang-java">package nl.kabisa.vertx;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import io.vertx.core.&#42;;
+import nl.kabisa.vertx.http.HttpServerVerticle;
+import nl.kabisa.vertx.tcp.&#42;;
+
+public class Application {
+
+    private static final Logger LOGGER = LogManager.getLogger&#40;&#41;;
+
+    private static Vertx vertx;
+
+    private static Future&lt;String&gt; deploy&#40;Vertx vertx, Verticle verticle&#41; {
+        Future&lt;String&gt; future = Future.future&#40;&#41;;
+        vertx.deployVerticle&#40;verticle, future&#41;;
+        return future;
+    }
+
+    public static void main&#40;String&#91;&#93; args&#41; {
+        LOGGER.info&#40;&quot;Starting&quot;&#41;;
+
+        vertx = Vertx.vertx&#40;&#41;;
+
+        CompositeFuture.all&#40;
+                deploy&#40;vertx, new AuthServiceVerticle&#40;&#41;&#41;,
+                deploy&#40;vertx, new ScreamingEchoServiceVerticle&#40;&#41;&#41;,
+                deploy&#40;vertx, new TcpClientVerticle&#40;&#41;&#41;&#41;
+                .compose&#40;s -&gt; deploy&#40;vertx, new HttpServerVerticle&#40;&#41;&#41;&#41;
+                .setHandler&#40;s -&gt; {
+                            if &#40;s.succeeded&#40;&#41;&#41; {
+                                LOGGER.info&#40;&quot;All verticles started successfully&quot;&#41;;
+                            } else {
+                                LOGGER.error&#40;&quot;Failed to deploy all verticles&quot;, s.cause&#40;&#41;&#41;;
+                            }
+                        }
+                &#41;;
+    }
+}
+</code></pre><p>Here, we deploy three verticles at the same time, and deploy the last one when the deployment of all the others succeeded. Again, beauty lies in the eyes of the beholder, but this is good enough for me.</p><p>Do you still remember the TCP client you saw above? Here’s the same client implemented using futures:</p><pre><code class="lang-java">package nl.kabisa.vertx.tcp;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import com.google.common.primitives.Bytes;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Future;
+import io.vertx.core.buffer.Buffer;
+import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.eventbus.Message;
+import io.vertx.core.json.JsonObject;
+import io.vertx.core.net.NetClient;
+import io.vertx.core.net.NetSocket;
+
+public class TcpClientVerticle extends AbstractVerticle {
+
+    public static final String REQUEST&#95;ADDRESS = &quot;tcp.client.request&quot;;
+
+    private static final Logger LOGGER = LogManager.getLogger&#40;&#41;;
+
+    private EventBus eventBus;
+    private NetClient authClient;
+    private NetClient echoClient;
+
+    private Future&lt;NetSocket&gt; connectToAuthService&#40;&#41; {
+        Future&lt;NetSocket&gt; future = Future.future&#40;&#41;;
+
+        authClient.connect&#40;3001, &quot;localhost&quot;, future&#41;;
+
+        return future;
+    }
+
+    private Future&lt;Buffer&gt; authenticate&#40;NetSocket authSocket&#41; {
+        Future&lt;Buffer&gt; future = Future.future&#40;&#41;;
+
+        authSocket.handler&#40;authBuffer -&gt; {
+            if &#40;authBuffer.getByte&#40;0&#41; == 0&#41; {
+                future.fail&#40;&quot;Invalid credentials&quot;&#41;;
+            } else if &#40;authBuffer.getByte&#40;0&#41; == 2&#41; {
+                future.fail&#40;&quot;Unexpected error&quot;&#41;;
+            } else if &#40;authBuffer.getByte&#40;0&#41; == 1&#41; {
+                future.complete&#40;authBuffer.getBuffer&#40;1, authBuffer.length&#40;&#41;&#41;&#41;;
+            } else {
+                future.fail&#40;&quot;Unexpected response from authentication service&quot;&#41;;
+            }
+        }&#41;;
+
+        authSocket.write&#40;Buffer.buffer&#40;new byte&#91;&#93; { 1, 2, 3, 4 }&#41;&#41;;
+
+        return future;
+    }
+
+    private Future&lt;NetSocket&gt; connectToEchoClient&#40;&#41; {
+        Future&lt;NetSocket&gt; future = Future.future&#40;&#41;;
+
+        echoClient.connect&#40;3002, &quot;localhost&quot;, future&#41;;
+
+        return future;
+    }
+
+    private Future&lt;Buffer&gt; forwardToEchoClient&#40;NetSocket echoSocket, Buffer token, String input&#41; {
+        Future&lt;Buffer&gt; future = Future.future&#40;&#41;;
+
+        echoSocket.handler&#40;echoBuffer -&gt; {
+            if &#40;echoBuffer.getByte&#40;0&#41; == 0&#41; {
+                future.fail&#40;&quot;Unauthenticated&quot;&#41;;
+            } else if &#40;echoBuffer.getByte&#40;0&#41; == 1&#41; {
+                future.complete&#40;echoBuffer.getBuffer&#40;1, echoBuffer.length&#40;&#41;&#41;&#41;;
+            } else {
+                future.fail&#40;&quot;Unexpected response from echo service&quot;&#41;;
+            }
+        }&#41;;
+        echoSocket.write&#40;Buffer.buffer&#40;Bytes.concat&#40;token.getBytes&#40;&#41;, input.getBytes&#40;&#41;&#41;&#41;&#41;;
+
+        return future;
+    }
+
+    private void handleEvent&#40;Message&lt;JsonObject&gt; event&#41; {
+        connectToAuthService&#40;&#41;
+                .compose&#40;this::authenticate&#41;
+                .compose&#40;token -&gt; connectToEchoClient&#40;&#41;
+                        .compose&#40;socket -&gt; forwardToEchoClient&#40;socket, token, event.body&#40;&#41;.getString&#40;&quot;body&quot;&#41;&#41;&#41;&#41;
+                .setHandler&#40;asyncBuffer -&gt; {
+                    if &#40;asyncBuffer.succeeded&#40;&#41;&#41; {
+                        event.reply&#40;asyncBuffer.result&#40;&#41;&#41;;
+                    } else {
+                        event.fail&#40;500, asyncBuffer.cause&#40;&#41;.getMessage&#40;&#41;&#41;;
+                    }
+                }&#41;;
+    }
+
+    @Override
+    public void start&#40;&#41; {
+        LOGGER.info&#40;&quot;Starting&quot;&#41;;
+
+        eventBus = vertx.eventBus&#40;&#41;;
+        authClient = vertx.createNetClient&#40;&#41;;
+        echoClient = vertx.createNetClient&#40;&#41;;
+
+        eventBus.consumer&#40;REQUEST&#95;ADDRESS, this::handleEvent&#41;;
+    }
+}
+</code></pre><p>Although I still have to look closely to see what the handleEvent method is doing exactly, I hope we can agree that this is an improvement over the callback-based implementation. In my opinion, it’s clearer what each part of the implementation is responsible for and which parts are related.</p><h2>Conclusion</h2><p>By looking at these few examples, you’ve seen part of what Vert.x has to offer. However, it doesn’t end with what’s described here. <a href='https://vertx.io/docs/'>Vert.x’s documentation page</a> offers a comprehensive list of books, manuals, and API docs that covers the complete toolkit. There’s also a page listing <a href='http://vertx.io/materials/'>learning materials</a> that should help you get started.</p><p>If you’re interested in the toolkit, you should definitely play around with the example application available at <a href="https://github.com/ljpengelen/vertx-demo/">https://github.com/ljpengelen/vertx-demo/</a>. Besides a few other verticles apart from those described here, there are a number of tests that should give you an impression of what Vert.x has to offer.</p><p>Once you get the hang of it, developing applications with Vert.x is quite enjoyable. As with all forms of asynchronous programming, however, I sometimes find myself in slightly annoying situations where a synchronous approach would be much easier to implement and reason about. The question is whether you’re willing to put up with a little extra work to enjoy the potential benefits of reactive systems.</p>
+
+<p>
+  <i>Published: 2019-08-08</i>
+  
+</p>
+
+<p>
+  <i>
+  Tagged:
+  
+  <span class="tag">
+    <a href="tags/Vert-x.html">Vert.x</a>
+  </span>
+  
+  <span class="tag">
+    <a href="tags/Java.html">Java</a>
+  </span>
+  
+  </i>
+</p>
+
+
+    </div>
+  </body>
+</html>

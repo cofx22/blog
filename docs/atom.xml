@@ -1,0 +1,1537 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>BBC: blog by cofx</title>
+  <link href="https://blog.cofx.nl/atom.xml" rel="self"/>
+  <link href="https://blog.cofx.nl"/>
+  <updated>2023-01-07T13:47:25+00:00</updated>
+  <id>https://blog.cofx.nl</id>
+  <author>
+    <name>cofx</name>
+  </author>
+  <entry>
+    <id>https://blog.cofx.nl/browser-beats-snare-and-hi-hat.html</id>
+    <link href="https://blog.cofx.nl/browser-beats-snare-and-hi-hat.html"/>
+    <title>Browser beats II: synthesizing a snare drum and a hi-hat</title>
+    <updated>2020-05-25T23:59:59+00:00</updated>
+    <content type="html">
+      <![CDATA[<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>In the previous installment of browser beats, we used the <a href='https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API'>Web Audio API</a> to synthesize a kick drum. This time, we’ll look at snares and hi-hats. Once you know how to synthesize kicks, snares and hi-hats are not far away.</p><h2>Snare</h2><p>The snare sound we’ll synthesize consists of two components. One component represents the vibrating skins of the snare drum, the other represents the vibrating snares. For the first component, we’ll use two sine-like waves, one at 185Hz and the other at 349Hz. I took these values from a <a href='https://www.musictech.net/tutorials/modular-eurorack-snare-tutorial/'>MusicTech tutorial</a>. An article in <a href='https://www.soundonsound.com/techniques/practical-snare-drum-synthesis'>Sound on Sound</a> mentions 180Hz and 330Hz. Obviously, you should go with whatever frequencies sound best to you.</p><pre><code class="lang-JavaScript">const playSnare = &#40;&#41; =&gt; {
+    const lowTriangle = audioContext.createOscillator&#40;&#41;;
+    lowTriangle.type = 'triangle';
+    lowTriangle.frequency.value = 185;
+
+    const highTriangle = audioContext.createOscillator&#40;&#41;;
+    highTriangle.type = 'triangle';
+    highTriangle.frequency.value = 349;
+
+    const lowWaveShaper = audioContext.createWaveShaper&#40;&#41;;
+    lowWaveShaper.curve = distortionCurve&#40;5&#41;;
+
+    const highWaveShaper = audioContext.createWaveShaper&#40;&#41;;
+    highWaveShaper.curve = distortionCurve&#40;5&#41;;
+
+    const lowTriangleGainNode = audioContext.createGain&#40;&#41;;
+    lowTriangleGainNode.gain.value = 1;
+    lowTriangleGainNode.gain.linearRampToValueAtTime&#40;0, audioContext.currentTime + 0.1&#41;
+
+    const highTriangleGainNode = audioContext.createGain&#40;&#41;;
+    highTriangleGainNode.gain.value = 1;
+    highTriangleGainNode.gain.linearRampToValueAtTime&#40;0, audioContext.currentTime + 0.1&#41;
+
+    const snareGainNode = audioContext.createGain&#40;&#41;;
+    snareGainNode.gain.value = 1;
+
+    lowTriangle.connect&#40;lowWaveShaper&#41;;
+    lowWaveShaper.connect&#40;lowTriangleGainNode&#41;;
+    lowTriangleGainNode.connect&#40;snareGainNode&#41;;
+    snareGainNode.connect&#40;audioContext.destination&#41;;
+
+    highTriangle.connect&#40;highWaveShaper&#41;;
+    highWaveShaper.connect&#40;highTriangleGainNode&#41;;
+    highTriangleGainNode.connect&#40;snareGainNode&#41;;
+
+    lowTriangle.start&#40;audioContext.currentTime&#41;;
+    lowTriangle.stop&#40;audioContext.currentTime + 1&#41;;
+
+    highTriangle.start&#40;audioContext.currentTime&#41;;
+    highTriangle.stop&#40;audioContext.currentTime + 1&#41;;
+};
+</code></pre><p>Together, these two sound like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/snare-and-hihat/audio/sines.mp3"></audio></p><p>We could have used pure sines waves here. There’s no need for applying the trick we used for the kick drum. What you’re witnessing here is a sheer waste of processing power due to my unwillingness to refactor this code right now. Let’s just say that I like the slightly more metallic sound of the distorted traingle waves.</p><p>We’ll use white noise again to represent the second component. This time, we’ll use a filter to cut of all frequencies below 2kHz.</p><pre><code class="lang-JavaScript">const playSnare = &#40;&#41; =&gt; {
+
+    ...
+
+    const noise = whiteNoiseBufferSource&#40;&#41;;
+
+    const noiseGainNode = audioContext.createGain&#40;&#41;;
+    noiseGainNode.gain.value = 1;
+    noiseGainNode.gain.linearRampToValueAtTime&#40;0, audioContext.currentTime + 0.2&#41;;
+
+    const noiseFilter = audioContext.createBiquadFilter&#40;&#41;;
+    noiseFilter.type = 'highpass';
+    noiseFilter.frequency.value = 2000;
+
+    noise.connect&#40;noiseGainNode&#41;;
+    noiseGainNode.connect&#40;noiseFilter&#41;;
+    noiseFilter.connect&#40;snareGainNode&#41;;
+
+    noise.start&#40;audioContext.currentTime&#41;;
+    noise.stop&#40;audioContext.currentTime + 1&#41;;
+};
+</code></pre><p>The filtered noise sounds like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/snare-and-hihat/audio/snare-noise.mp3"></audio></p><p>Finally, the distorted sines and the noise together sound like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/snare-and-hihat/audio/snare.mp3"></audio></p><h2>Hi-hat</h2><p>Some filtered white noise is all you need for a hi-hat. We again cut all frequencies below 2kHz. This time, the volume should fade to zero in 100 milliseconds.</p><pre><code class="lang-JavaScript">const playHiHat = &#40;&#41; =&gt; {
+    const noise = whiteNoiseBufferSource&#40;&#41;;
+
+    const noiseGainNode = audioContext.createGain&#40;&#41;;
+    noiseGainNode.gain.value = 1;
+    noiseGainNode.gain.setValueAtTime&#40;1, audioContext.currentTime + 0.001&#41;;
+    noiseGainNode.gain.linearRampToValueAtTime&#40;0, audioContext.currentTime + 0.1&#41;;
+
+    const noiseFilter = audioContext.createBiquadFilter&#40;&#41;;
+    noiseFilter.type = 'highpass';
+    noiseFilter.frequency.value = 2000;
+
+    const hiHatGainNode = audioContext.createGain&#40;&#41;;
+    hiHatGainNode.gain.value = 0.3;
+
+    noise.connect&#40;noiseGainNode&#41;;
+    noiseGainNode.connect&#40;noiseFilter&#41;;
+    noiseFilter.connect&#40;hiHatGainNode&#41;;
+    hiHatGainNode.connect&#40;audioContext.destination&#41;;
+
+    hiHatGainNode.connect&#40;analyser&#41;
+
+    noise.start&#40;audioContext.currentTime&#41;;
+    noise.stop&#40;audioContext.currentTime + 1&#41;;
+};
+</code></pre><p>The end result sounds like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/snare-and-hihat/audio/hihat-noise.mp3"></audio></p><h2>Conclusion</h2><p>The snare and hi-hat we’ve produced here are pretty basic. If you want to dig deeper to achieve prettier or more realistic results, the following articles would be good starting points:</p><ul><li><a href='https://www.soundonsound.com/techniques/practical-snare-drum-synthesis'>https://www.soundonsound.com/techniques/practical-snare-drum-synthesis</a></li><li><a href='https://www.soundonsound.com/techniques/practical-cymbal-synthesis'>https://www.soundonsound.com/techniques/practical-cymbal-synthesis</a></li></ul><p>Don’t forget to put these sounds to the test by playing along with your favorite songs: <a href='https://ljpengelen.github.io/groovid19/kick-snare-hihat.html'>https://ljpengelen.github.io/groovid19/kick-snare-hihat.html</a>.</p>]]>
+    </content>
+  </entry>
+  <entry>
+    <id>https://blog.cofx.nl/browser-beats-kick-drum.html</id>
+    <link href="https://blog.cofx.nl/browser-beats-kick-drum.html"/>
+    <title>Browser beats I: synthesizing a kick drum</title>
+    <updated>2020-05-25T23:59:59+00:00</updated>
+    <content type="html">
+      <![CDATA[<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>Because I wanted to gain some experience in working with <a href='https://angular.io/'>Angular</a> and <a href='https://ngrx.io/'>NgRx</a>, I started building a sample-based step sequencer that runs in the browser. To do that, I had to dive into the <a href='https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API'>Web Audio API</a>. I’ll write something about that step sequencer later. First, I want to take a look at the basics of the Web Audio API and try to synthesize a kick drum.</p><h2>The basis</h2><p>At the basis of most syntesized kick drums, there’s a sine wave, or something that’s close to a sine wave. The function below produces a sine wave with a frequency of 55Hz that plays for the duration of ten seconds.</p><pre><code class="lang-JavaScript">const play = &#40;&#41; =&gt; {
+    const audioContextClass = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new audioContextClass&#40;&#41;;
+
+    const sine = audioContext.createOscillator&#40;&#41;;
+    sine.type = 'sine';
+    sine.frequency.value = 55;
+
+    sine.start&#40;audioContext.currentTime&#41;;
+    sine.stop&#40;audioContext.currentTime + 10&#41;;
+}
+</code></pre><p>It sounds like this: (You might not hear it over your laptop’s speakers. You’ll need decent speakers or headphones that are able to reproduce low frequencies.)</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/sine-55Hz.mp3"></audio></p><p>When you visualize that sound, as shown below, you’ll see why it’s called a sine wave. The left-hand side of the figure shows the waveform, and the right-hand side shows the sound spectrum.</p><p><img src="assets/browser-beats-i/sine-55Hz.png" alt="Sine at 55Hz" /></p><p>The sound spectrum is almost completely empty, except for a narrow spike at the rightmost end. This explains why you might not hear the sound over your laptop speakers, for example. Not all speakers are capable of reproducing sounds at low frequencies. You can emulate the frequency response of such speakers by applying a high-pass filter. If you filter out all frequencies below 120Hz, this is what’s left of our sine wave:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/sine-55Hz-high-pass-120Hz.mp3"></audio></p><p>The graphs below further illustrate that not much is left of the original sound.</p><p><img src="assets/browser-beats-i/sine-55Hz-high-pass-120Hz.png" alt="Sine at 55Hz through a high-pass filter at 120Hz" /></p><p>What does that mean for our synthesized kick drum? We’ll apply a trick to make your ears believe that there’s still some bass to be heard, even when listening to speakers that can’t reproduce low frequencies very well. Instead of a sine wave, we’ll start out with a triangle wave.</p><pre><code class="lang-JavaScript">const play = &#40;&#41; =&gt; {
+    const audioContextClass = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new audioContextClass&#40;&#41;;
+
+    const triangle = audioContext.createOscillator&#40;&#41;;
+    triangle.type = 'triangle';
+    triangle.frequency.value = 55;
+
+    triangle.connect&#40;audioContext.destination&#41;;
+
+    triangle.start&#40;audioContext.currentTime&#41;;
+    triangle.stop&#40;audioContext.currentTime + 10&#41;;
+}
+</code></pre><p>Without further processing, it will look like this:</p><p><img src="assets/browser-beats-i/triangle-55Hz.png" alt="Triangle at 55Hz" /></p><p>It’s again clear where the name comes from. It’s also clear that there’s much more going on in the spectrum graph.</p><p>Unfortunately, it sounds a little abrasive, like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/triangle-55Hz.mp3"></audio></p><p>Ideally, we’d like to process this triangle wave in such a way that it sounds more like the sine wave, without cutting off too much of the high-frequency sounds. We can do that using a wave shaper.</p><pre><code class="lang-JavaScript">const distortionCurve = &#40;amount&#41; =&gt; {
+    const numberOfSamples = 44100;
+    const curve = new Float32Array&#40;numberOfSamples&#41;;
+    const deg = Math.PI / 180;
+    for &#40;let i = 0; i &lt; numberOfSamples; ++i&#41; {
+        const x = i &#42; 2 / numberOfSamples - 1;
+        curve&#91;i&#93; = &#40;3 + amount&#41; &#42; x &#42; 20 &#42; deg / &#40; Math.PI + amount &#42; Math.abs&#40;x&#41; &#41;;
+    }
+    return curve;
+};
+
+const play = &#40;&#41; =&gt; {
+    const audioContextClass = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new audioContextClass&#40;&#41;;
+
+    const triangle = audioContext.createOscillator&#40;&#41;;
+    triangle.type = 'triangle';
+    triangle.frequency.value = 55;
+
+    const waveShaper = audioContext.createWaveShaper&#40;&#41;;
+    waveShaper.curve = distortionCurve&#40;5&#41;;
+
+    triangle.connect&#40;waveShaper&#41;;
+    waveShaper.connect&#40;audioContext.destination&#41;;
+
+    triangle.start&#40;audioContext.currentTime&#41;;
+    triangle.stop&#40;audioContext.currentTime + 10&#41;;
+}
+</code></pre><p>The curve I’m using above comes from a <a href='https://stackoverflow.com/questions/22312841/waveshaper-node-in-webaudio-how-to-emulate-distortion'>Stack Overflow</a> answer by <a href='https://stackoverflow.com/users/717965/kevin-ennis'>Kevin Ennis</a>. In theory, there are multiple <a href='https://en.wikipedia.org/wiki/Sigmoid_function'>Sigmoid functions</a> that you could use. I only tried this one and stuck with it because I liked the result.</p><p>Speaking of results, here are the graphs for this sound:</p><p><img src="assets/browser-beats-i/triangle-55Hz-waveshaper.png" alt="Triangle at 55Hz through a wave shaper" /></p><p>The triangles look a lot more like sines, and there is still something going on at the higher end of the frequency spectrum. The resulting sound sounds like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/triangle-55Hz-waveshaper.mp3"></audio></p><p>The <a href='https://webaudio.github.io/web-audio-api/#dom-waveshapernode-curve'>W3C spec</a> gives a good explanation of what’s actually going on when you apply a wave shaper with a certain curve. I won’t go into the details here.</p><p>What did we achieve with this detour? If we filter out the low frequencies again to simulate cheaper speakers, we end up with the following sound:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/triangle-55Hz-waveshaper-high-pass.mp3"></audio></p><p>The graphs for this filtered sound are shown below. When you compare these to the ones for the filtered sine wave shown above, you’ll notice that there’s still something to hear after removing the low end. This is enough for you ears to trick you into believing that there’s actually some low end left, even when there isn’t.</p><p><img src="assets/browser-beats-i/triangle-waveshaper-high-pass.png" alt="Triangle at 55Hz through a wave shaper and a high-pass filter at 120Hz" /></p><h2>Make it boom</h2><p>The sound we ended up with sounds a little like “WOOOOOOOOOOH”. Let’s turn that into a “WOOOOM”.</p><pre><code class="lang-JavaScript">const play = &#40;&#41; =&gt; {
+    const audioContextClass = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new audioContextClass&#40;&#41;;
+
+    const triangle = audioContext.createOscillator&#40;&#41;;
+    triangle.type = 'triangle';
+    triangle.frequency.value = 55;
+
+    const waveShaper = audioContext.createWaveShaper&#40;&#41;;
+    waveShaper.curve = distortionCurve&#40;5&#41;;
+
+    const triangleGainNode = audioContext.createGain&#40;&#41;;
+    triangleGainNode.gain.value = 1;
+    triangleGainNode.gain.linearRampToValueAtTime&#40;0, audioContext.currentTime + 0.6&#41;
+
+    triangle.connect&#40;waveShaper&#41;;
+    waveShaper.connect&#40;triangleGainNode&#41;;
+    triangleGainNode.connect&#40;audioContext.destination&#41;;
+
+    triangle.start&#40;audioContext.currentTime&#41;;
+    triangle.stop&#40;audioContext.currentTime + 1&#41;;
+}
+</code></pre><p>In the snippet above, you’ll see that we’re using a gain node to gradually fade out over the course of 600 milliseconds. The end result sounds like this.</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/release.mp3"></audio></p><p>Now that we have something that sounds like “WOOOOM”, let’s make it sound like “BOOOOM”.</p><pre><code class="lang-JavaScript">const play = &#40;&#41; =&gt; {
+    const audioContextClass = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new audioContextClass&#40;&#41;;
+
+    const triangle = audioContext.createOscillator&#40;&#41;;
+    triangle.type = 'triangle';
+    triangle.frequency.value = 220;
+    triangle.frequency.exponentialRampToValueAtTime&#40;55, audioContext.currentTime + 0.1&#41;;
+
+    const waveShaper = audioContext.createWaveShaper&#40;&#41;;
+    waveShaper.curve = distortionCurve&#40;5&#41;;
+
+    const triangleGainNode = audioContext.createGain&#40;&#41;;
+    triangleGainNode.gain.value = 1;
+    triangleGainNode.gain.linearRampToValueAtTime&#40;0, audioContext.currentTime + 0.6&#41;
+
+    triangle.connect&#40;waveShaper&#41;;
+    waveShaper.connect&#40;triangleGainNode&#41;;
+    triangleGainNode.connect&#40;audioContext.destination&#41;;
+
+    triangle.start&#40;audioContext.currentTime&#41;;
+    triangle.stop&#40;audioContext.currentTime + 1&#41;;
+}
+</code></pre><p>As shown above, we do that be quickly lowering the frequency of the triangle wave from 220Hz to 55Hz over the course of 100 milliseconds. The end result sounds like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/pitch.mp3"></audio></p><p>If you want to achieve more of a 90s Euro house vibe, you can drop down from a higher frequency.</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/pitch-extreme.mp3"></audio></p><h2>White noise</h2><p>If you look at <a href='https://www.soundonsound.com/techniques/practical-bass-drum-synthesis'>how classic synthesizers emulate kick drums</a>, you’ll see that they’ll often use a little white noise to give the kicks a little more body. The Web Audio API doesn’t provide (white) noise out of the box, but you can use an audio buffer to <a href='https://noisehack.com/generate-noise-web-audio-api/'>create your own</a>.</p><pre><code class="lang-JavaScript">const generateWhiteNoiseBuffer = &#40;numberOfSamples&#41; =&gt; {
+    const buffer = audioContext.createBuffer&#40;1, numberOfSamples, audioContext.sampleRate&#41;;
+
+    const data = buffer.getChannelData&#40;0&#41;;
+    for &#40;let i = 0; i &lt; numberOfSamples; ++i&#41; {
+        data&#91;i&#93; = Math.random&#40;&#41; &#42; 2 - 1;
+    }
+
+    return buffer;
+}
+
+const whiteNoiseBuffer = generateWhiteNoiseBuffer&#40;audioContext.sampleRate&#41;;
+
+const whiteNoiseBufferSource = &#40;&#41; =&gt; {
+    const bufferSource = audioContext.createBufferSource&#40;&#41;;
+    bufferSource.buffer = whiteNoiseBuffer;
+    bufferSource.loop = true;
+    bufferSource.loopEnd = audioContext.sampleRate
+    return bufferSource;
+}
+</code></pre><p>Each buffer source returned by the function whiteNoiseBufferSource can only be started once. The same holds for the oscillator nodes that we’ve been creating above. The buffer returned by generateWhiteNoiseBuffer, however, can be reused. The result sounds like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/white-noise.mp3"></audio></p><p>The next step is to apply a fade to this sound, just like we did before.</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/white-noise-release.mp3"></audio></p><p>After that, we cut of most of the higher frequencies using a low pass filter.</p><pre><code class="lang-JavaScript">const play = &#40;&#41; =&gt; {
+
+    ...
+
+    const noise = whiteNoiseBufferSource&#40;&#41;;
+
+    const noiseGainNode = audioContext.createGain&#40;&#41;;
+    noiseGainNode.gain.value = 1;
+    noiseGainNode.gain.linearRampToValueAtTime&#40;0, audioContext.currentTime + 0.2&#41;;
+
+    const noiseFilter = audioContext.createBiquadFilter&#40;&#41;;
+    noiseFilter.type = 'lowpass';
+    noiseFilter.frequency.value = 120;
+
+    noise.connect&#40;noiseGainNode&#41;;
+    noiseGainNode.connect&#40;noiseFilter&#41;;
+    noiseFilter.connect&#40;audioContext.destination&#41;;
+
+    noise.start&#40;audioContext.currentTime&#41;;
+    noise.stop&#40;audioContext.currentTime + 1&#41;;
+};
+</code></pre><p>The end result sounds like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/white-noise-low-pass.mp3"></audio></p><h2>End result</h2><p>Combining the sine-like wave and the filtered white noise leads to the following result:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/triangle-and-noise.mp3"></audio></p><p>All you need is a handful of other instruments and you’re halfway making the next big dance hit, in your browser.</p><h2>Conclusion</h2><p>Let’s put the results of all this hard work into action. First, open Youtube, Spotify or whatever streaming service you like to play your favorite song. Then, visit <a href='https://ljpengelen.github.io/groovid19/kick-snare-hihat.html'>https://ljpengelen.github.io/groovid19/kick-snare-hihat.html</a> and press <code>q</code>, <code>w</code>, and <code>e</code> to drum along. Enjoy!</p>]]>
+    </content>
+  </entry>
+  <entry>
+    <id>https://blog.cofx.nl/where-to-put-json-web-tokens.html</id>
+    <link href="https://blog.cofx.nl/where-to-put-json-web-tokens.html"/>
+    <title>Where to put JSON Web Tokens in 2019</title>
+    <updated>2019-08-26T23:59:59+00:00</updated>
+    <content type="html">
+      <![CDATA[<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>A few years ago, I gave a talk about JSON Web Tokens (JWTs) during a Meetup for Java enthusiasts in Eindhoven. Triggered by a talk about JWTs I attended recently, I decided to dust of my presentation and the demo applications I made back then to see whether they still hold up. It turns out that life is a little harder in 2019 than it was in 2016, at least as far as security and JWTs are concerned. Before we go into the details, we should first discuss the basics.</p><h2>JSON Web Tokens</h2><p>Essentially, a JSON Web Token is something that a server application would give to a client application, which the client would then use to authenticate itself with the server when doing requests. A JSON Web Token looks something like this:</p><p><strong style="word-break: break-all"> <span style="color: red">eyJhbGciOiJIUzUxMiJ9</span>.<span style="color: fuchsia">eyJleHAiOjE0NzYyOTAxNDksInN1YiI6IjEifQ</span>.<span style="color: blue">mvJEWu3kxm0WSUKu-qEVTBmuelM-2Te-VJHEFclVt_uR89ya0hNawkrgftQbAd-28lycLX2jXCgOGrA3XRg9Jg</span> </strong></p><p>If you look closely, you’ll see that it consists of three base64-encoded strings, joined by periods. If you decode the ones above, you end up with the following:</p><pre><code class="lang-json">{
+  &quot;alg&quot;: &quot;HS512&quot;
+}
+</code></pre><pre><code class="lang-json">{
+  &quot;exp&quot;: 1476290149,
+  &quot;sub&quot;:&quot;1&quot;
+}
+</code></pre><pre><code class="lang-JavaScript">HMACSHA512&#40;
+  base64UrlEncode&#40;header&#41; + &quot;.&quot; +
+  base64UrlEncode&#40;payload&#41;,
+  secret
+&#41;
+</code></pre><p>The first part is the header, the second is the payload, and the third is the signature. Anyone that gets their hands on this token can decode the strings. (Execute <code>atob&#40;&quot;eyJhbGciOiJIUzUxMiJ9&quot;&#41;</code> in the console of your browser if you want to see for yourself.) This means that anyone who gets their hands on the token can use the encoded information. Because only the server knows the secret that was used to compute the signature from the header and body, however, only the server can check the validity of a token by recomputing its expected signature and comparing it with the actual signature. Once the server has determined that a given JWT is valid, it knows that it issued the token itself, and that the data in the body can be trusted.</p><p>The header specifies which algorithm was used to compute the signature. In this case, that’s the HMAC-SHA512 algorithm.</p><p>The payload can contain any number of claims. In this example, the standard claims <code>exp</code> and <code>sub</code> are used. The claim <code>exp</code> (short for “expiration time”) specifies when the token expires. The claim <code>sub</code> (short for “subject”) specifies the subject of the token, usually something like a user of your app, denoted by an identifier. There are a number of other standard claims, and you’re free to add claims of your own.</p><h2>A trip down memory lane</h2><p>When I first read about JWTs, I was still used to working in an environment where deployments lead to downtime and were something that you’d do very early in the morning, so that they would impact as little end users as possible. Because they had to take place early in the morning, they didn’t occur very frequently. As a consequence, multiple features where collected and released together, and deployments automatically became stressful.</p><p>The back-end applications I worked on at that time maintained in-memory sessions for logged in users. If one of the servers went down, the users whose sessions were stored on that server would lose their session. In situations like that, you can’t just release a bug fix in the middle of the day, because you’d potentially log out part of your users.</p><p>First and foremost, I saw JWTs as a solution to this problem. (There are other, potentially better, solutions to this problem, but let’s ignore those for the time being.) Two or more instances of the same back-end application could sit behind a load balancer and issue JWTs to clients. All of these instances would be able to validate JWTs issued by any one of them. The body of each JWT could contain the information that would normally be stored in a session, such as the identifier of the currently logged-in user. If one of the instance would go down (during a deployment, for example), the load balancer would just route requests to the remaining instance(s) and clients wouldn’t notice anything.</p><p>I was convinced that JWTs could solve one of my problems, but I wasn’t sure how clients and servers should exchange them. Should they be sent along with requests in a header or should they be kept in a cookie? In the case of communication between back-end applications, the answer is clear. It’s much easier to follow conventions and put them in a header, and there’s no benefit to putting them in cookies instead. In the case of communication between client applications running in a browser and back-end applications, the answer is less clear. I remember frantically Googling for best practices while preparing for my presentation and being confronted with all sorts of contradictory claims and advice. Before we can discuss the conclusion I reached back then, we need to take a detour.</p><h2>CSRF and XSS</h2><p>The term cross-site request forgery (CSRF) is used for the situation where someone else’s web application secretly lets its visitors perform actions with your web application due to cookies still present from previous visits.</p><p>The following example (a modified version of one provided by <a href='https://owasp.org/www-community/attacks/csrf'>OWASP</a>) shows a form that tricks unsuspecting users into sending 10.000 euro (?) to my bank account at <a href="http://bank.com">http://bank.com</a>:</p><pre><code class="lang-html">&lt;form action=&quot;http://bank.com/transfer.do&quot; method=&quot;POST&quot;&gt;
+  &lt;input type=&quot;hidden&quot; name=&quot;account&quot; value=&quot;LUC&quot;/&gt;
+  &lt;input type=&quot;hidden&quot; name=&quot;amount&quot; value=&quot;100000&quot;/&gt;
+  &lt;input type=&quot;submit&quot; value=&quot;View my pictures&quot;/&gt;
+&lt;/form&gt;
+</code></pre><p>The term cross-site scripting (XSS) is used for the situation where someone is able to have their scripts executed as part of your web application.</p><p>The following example (directly stolen from <a href='https://www.owasp.org/index.php/Cross-site_Scripting_(XSS'>OWASP</a>) without any extra effort) shows part of a JSP template that allows anyone to execute code on the corresponding web page:</p><pre><code class="lang-java">&lt;% String eid = request.getParameter&#40;&quot;eid&quot;&#41;; %&gt;
+	...
+	Employee ID: &lt;%= eid %&gt;
+</code></pre><p>Imagine the nightmares you’ll have after clicking <a href="http://example.com/employee.jsp?eid=alert%28%22you%20have%20been%20p0wned%22%29">http://example.com/employee.jsp?eid=alert%28%22you%20have%20been%20p0wned%22%29</a>...</p><h2>Cookie or header?</h2><p>If you put your JWTs in a cookie, you need to take precautions to combat CSRF. If you use secure, HTTP-only cookies, you don’t need to worry about XSS, however, because scripts don’t have access to the content of such cookies. There’s no way someone can abuse XSS and take your JWT to impersonate you.</p><p><i> Update 2023-01-06: Unfortunately, you </i>do<i> need to worry about XSS, even with secure, HTTP-only cookies. See the second addendum below to find out why. I'm leaving the rest of this post as it is because I don't want to rewrite history. However, I no longer agree with the conclusion at the end of this section and the final conclusion of this post. </i></p><p>If you put your JWTs in a header, you don’t need to worry about CSRF. You <em>do</em> need to worry about XSS, however. If someone can abuse XSS to steal your JWT, this person is able to impersonate you.</p><p>In my 2016 presentation, I stated that “defense against CSRF is straightforward and durable.” This statement was based on advice offered by the <a href='https://www.owasp.org/'>Open Web Application Security Project (OWASP)</a> at that time. Years later, defense against CSRF is still durable, but a little less straightforward. We’ll come back to that in a minute.</p><p>XSS, on the other hand, is something you need to constantly keep in mind. Each template you add could open up possibilities for XSS. The same holds for all those NPM packages you add to your front-end project, either directly or indirectly.</p><p>My conclusion from this is that JWTs belong in a secure, HTTP-only cookie, and should be used in combination with preventive measures against CSRF.</p><h2>Seeing is believing</h2><p>Because the proof of the pudding is in the eating, I wrote a simple front-end app and two back-end apps that demonstrate a session-based and JWT-based approach to authentication: <a href="https://github.com/ljpengelen/java-meetup-jwt">https://github.com/ljpengelen/java-meetup-jwt</a>.</p><p>With a simple <code>docker-compose</code> command, you can start three instances of either of the two back ends, a database, and an instance of nginx that serves the front end and acts as load balancer. You can open the front end in your browser, create an account, log in, and then stop some of the back-end instances with <code>docker stop</code>.</p><p>In the case of the JWT-based back end, it doesn’t matter which two instances you stop. In the case of the session-based back end, stopping the instance your connected to will terminate your session.</p><h2>Measures against CSRF</h2><p>The OWASP has a <a href='https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html'>cheat sheet about measures against CSRF</a>. The applications mentioned above use two of those measures.</p><p>First, they combat CSRF by checking the <code>Origin</code> and <code>Referer</code> headers. If the value of none of these headers match the expected value for a given request, the request is denied.</p><p>Second, each response returned by the back end contains a secure random token in two locations. One is sent in a header, where it can be read by the front end. The other is stored in the session (in case of the session-based back end) or in yet another secure, HTTP-only cookie (in case of the JWT-based back end) and is only accessible for the back end. These tokens are generated by a cryptographically secure random-number generator. The front-end application reads the token in the header of each response and passes it on with the next request. For each request to a protected endpoint, the back end checks whether the two tokens match. If they match, the request is granted. Otherwise, it’s denied.</p><p>Keeping track of the CSRF tokens in the front end is not completely straightforward. It takes a little effort to keep track of the latest token value and forward it with each request, but that’s an acceptable price to pay if you ask me.</p><p>For the JWT-based back end, both measures above come from the section of the <a href='https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html'>OWASP cheat sheet</a> describing measures for defense in depth. The second measure is known as the double-submit cookie technique. To mitigate the known issues of this technique, the CSRF token is stored in a JWT. Additionally, the account identifier is included in this JWT as well for logged-in users. Storing the CSRF token in a JWT makes it possible for the back-end application to verify that it produced the token itself. Combining the CSRF token with an account identifier makes it impossible for attackers to reuse a token for another user, even if they were able to <a href='https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html#double-submit-cookie'>replace cookies</a>.</p><h2>Lifespan of a JWT</h2><p>Think about the following for a second: What happens to already issued JWTs when you change your credentials? What happens to already issued JWTs when you delete your account? In both scenarios, existing JWTs will remain valid. Without additional measures, JWTs remain valid until they expire or until the secret on the server is changed. If someone gets their hands on a token, it can be abused until it expires. If you want to invalidate a single token by changing the secret on the server, you invalidate all tokens.</p><p>When should a JWT expire? On one hand, they should expire as soon as possible, to prevent misuse for long periods. On the other hand, they should expire as late as possible, so that users don’t have to re-authenticate all the time.</p><p>In practice, two types of tokens are used together, to achieve the best of both worlds. A short-lived <em>access token</em> is used for authentication per request. A long-lived <em>refresh token</em> is used to generate new access token when needed.</p><p>Each time the refresh token is used to obtain a new access token, some additional checks could be made to enhance security. The refresh token can be used in combination with a blacklist, for example, to invalidate tokens that were issued for a particular user before a given point in time.</p><h2>What kind of abuse is this protecting you from?</h2><p>Because the JWTs are stored in secure, HTTP-only cookies, it is implausible that someone would be able to access the JWTs themselves. An attacker would, for example, need access to a victim’s computer to read the values of these cookies. The blacklist mentioned above could be used to invalidate JWTs comprised like this. However, if someone is able to access cookies directly from your computer, you have bigger problems to worry about that lie beyond the responsibility of an app developer. Moreover, there’s no reasonable defense against someone willing to turn your life into a Quentin Tarantino movie to access your data or credentials.</p><p>Other scenarios in which an attacker would be able to read the values of the JWTs would be when the attacker is able to intercept traffic between client and server or when an attacker would have access to the server. In such scenarios, all that can be done is patch up the security holes and change the secret key used to sign JWTs. The latter is the easiest way of invalidating all JWTs that have been issued before. Protection against these types of attacks cannot be implemented on the application level.</p><p>In short, your JWTs are reasonably safe from harm in their cookies. More realistically, however, it could happen that you inadvertently introduce an XSS vulnerability in your app. This could enable an attacker to access the value of the CSRF token, and use it in a CSRF attack. Also in this scenario, all you can do is change the secret to invalidate all tokens after patching the vulnerability.</p><h2>Conclusion</h2><p>I am not a security expert, and I must stress that you shouldn’t mistake my advice for the absolute truth on this subject. Instead, I hope this post allows you to follow my reasoning and helps you make informed decisions when you have to choose between different forms of authentication.</p><p>I’m well aware that the contradictory advice I encountered years ago is still out there, and that most people put their JWTs in a header. I guess those people are more scared of CSRF and that I’m more afraid of XSS.</p><p><i> Update 2023-01-06: As mentioned above, my opinion about where to put JWTs has changed. The second addendum below explains why. </i></p><h2>Addendum</h2><p>Right after this blog post got published, my colleague <a href='https://github.com/lukvdborne'>Luk van den Borne</a> shared a post about <a href='https://www.sjoerdlangkemper.nl/2017/02/09/cookie-prefixes/'>securing cookies with cookie prefixes</a>. Coincidentally, that post describes a way to patch one of the security holes in the JWT-based back end. This back end is vulnerable for an attack called <a href='https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html#login-csrf'>login CSRF</a>, which is when an attacker is able to make users log in using the attacker’s account. This attack is possible when an attacker has access to an insecure subdomain of the domain that hosts your app. Attackers can use this insecure subdomain to set an arbitrary value for the cookie holding the CSRF token. This attack is only possible for the API call that is used to log in, because the CSRF token is tied to the user’s account identifier after logging in.</p><p>Simply adding the prefix <code>&#95;&#95;Host-</code> to the name of the cookie that holds the CSRF token triggers browser behavior that mitigates this type of attack, at least for users of Chrome and Firefox.</p><h2>Second addendum</h2><p>While copying the <a href='https://www.kabisa.nl/tech/where-to-put-json-web-tokens-in-2019/'>original version of this blog post</a> from Kabisa's Tech Blog on 2023-01-06, I noticed a comment by Dmytro Lapshyn that triggered me to reconsider the conclusion of this post. It turns out that the following statement made above is not completely true:</p><blockquote><p> "If you use secure, HTTP-only cookies, you don’t need to worry about XSS, however, because scripts don’t have access to the content of such cookies. There’s no way someone can abuse XSS and take your JWT to impersonate you." </p></blockquote><p>It's true that no one can use XSS to take your JWT from a secure, HTTP-only cookie and use it to impersonate you. Unfortunately, that doesn't mean that you don't have to worry about XSS.</p><p>Later on in the post above, the following statement is made:</p><blockquote><p> "More realistically, however, it could happen that you inadvertently introduce an XSS vulnerability in your app. This could enable an attacker to access the value of the CSRF token, and use it in a CSRF attack." </p></blockquote><p>At the time of writing, my reasoning was that someone else getting their hands on a JWT would be worse than someone getting their hands on an anti-CSRF token. A JWT can be used to impersonate the person for which it was issued. You can't do that with an anti-CSRF token by itself. However, if that anti-CSRF token is obtained via XSS or any other way of injecting and executing arbitrary JavaScript, then it's also possible to use JavaScript to perform HTTP requests that include both the anti-CRSF token and the cookie containing the JWT. Even without obtaining the JWT itself, the same kind of abuse is possible.</p><p>In conclusion, it's not worth going through all the extra trouble to pass JWTs along in cookies.</p><p>It's good to know that the more complicated approach has no benefits over the simpler approach. It's less reassuring that XSS or some other way of injecting and executing arbitrary JavaScript opens up the possibility of this kind of abuse. Keeping an eye on your own code is one thing. Keeping a close eye on your dependencies and their dependencies is another story.</p>]]>
+    </content>
+  </entry>
+  <entry>
+    <id>https://blog.cofx.nl/parallel-docker-containers-jenkins.html</id>
+    <link href="https://blog.cofx.nl/parallel-docker-containers-jenkins.html"/>
+    <title>Running multiple Docker containers in parallel with Jenkins</title>
+    <updated>2019-08-19T23:59:59+00:00</updated>
+    <content type="html">
+      <![CDATA[<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>This morning, I was looking for a way to run multiple Docker containers in parallel with Jenkins. Even though this seemed like a common use case to me, it took me a while to find all information I needed and piece it together. As you know, the only design pattern you need is copy-paste. I wrote this post to allow you and my future self to copy-paste some useful snippets from a Jenkinsfile.</p><p>Suppose you have a Java app that requires a PostgreSQL database. If you want to run a few integration tests for that app, you’ll probably need this database to be accessible as well. To make it possible for Jenkins to run these integration tests for you, you could just install PostgreSQL on the machine running Jenkins, create the necessary databases and users, and call it a day. However, I’d rather keep each app in its own Docker container and only have apps running when they’re needed.</p><p>Consider the following Jenkinsfile:</p><pre><code class="lang-groovy">def withDockerNetwork&#40;Closure inner&#41; {
+  try {
+    networkId = UUID.randomUUID&#40;&#41;.toString&#40;&#41;
+    sh &quot;docker network create ${networkId}&quot;
+    inner.call&#40;networkId&#41;
+  } finally {
+    sh &quot;docker network rm ${networkId}&quot;
+  }
+}
+
+pipeline {
+  agent none
+
+  stages {
+    stage&#40;&quot;test&quot;&#41; {
+      agent any
+
+      steps {
+        script {
+          def database = docker.build&#40;&quot;database&quot;, &quot;database&quot;&#41;
+          def app = docker.build&#40;&quot;app&quot;, &quot;-f dockerfiles/ci/Dockerfile .&quot;&#41;
+
+          withDockerNetwork{ n -&gt;
+            database.withRun&#40;&quot;--network ${n} --name database&quot;&#41; { c -&gt;
+              app.inside&#40;&quot;&quot;&quot;
+                --network ${n}
+                -e 'SPRING&#95;DATASOURCE&#95;URL=jdbc:postgresql://database:5432/test'
+              &quot;&quot;&quot;&#41; {
+                sh &quot;mvn verify&quot;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre><p>The function <code>withDockerNetwork</code> (copy-pasted from <a href='https://issues.jenkins-ci.org/browse/JENKINS-49567'>Ryan Desmon</a>) creates and eventually deletes a Docker network with a random name. After creating the network, it calls a block of code of your choice and provides it with this random name. After the block of code has finished, the network is deleted.</p><p>The statement <code>docker.build&#40;&quot;database&quot;, &quot;database&quot;&#41;</code> builds a Docker image named “database” with the context <code>database</code>. The statement <code>docker.build&#40;&quot;app&quot;, &quot;-f dockerfiles/ci/Dockerfile .&quot;&#41;</code> builds a Docker image named “app” from the Dockerfile <code>dockerfiles/ci/Dockerfile</code> with context <code>.</code>.</p><p>Once both images are built, containers based on these images are started and connected to the same network, allowing them to communicate. The arguments <code>--network ${n}</code> are used to connect both containers to the network. The container for the database is given a name explicitly with the argument <code>--name database</code>, so that we can point the app to it. The latter is achieved by setting an environment variable with the argument <code>-e 'SPRING&#95;DATASOURCE&#95;URL=jdbc:postgresql://database:5432/test'</code>. This last step is specific to Spring. You’ll probably need to do something completely different for your own use case.</p><p>Once both containers are running, the tests for the app are executed by the step <code>sh &quot;mvn verify&quot;</code>. This step is specific to Java and Maven and is again unrelated to running containers in parallel.</p><p>If you want to see this in action, take a look at <a href='https://github.com/ljpengelen/java-meetup-jwt'>https://github.com/ljpengelen/java-meetup-jwt</a>. The example above is a simplified version of the Jenkinsfile used for this project.</p>]]>
+    </content>
+  </entry>
+  <entry>
+    <id>https://blog.cofx.nl/reactive-java-with-vertx.html</id>
+    <link href="https://blog.cofx.nl/reactive-java-with-vertx.html"/>
+    <title>Reactive Java using the Vert.x toolkit</title>
+    <updated>2019-08-08T23:59:59+00:00</updated>
+    <content type="html">
+      <![CDATA[<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p><a href='https://vertx.io/'>Vert.x</a> is a toolkit for developing reactive applications on the JVM. Although it’s possible to use Vert.x with many different languages (Java, JavaScript, Groovy, Ruby, Ceylon, Scala and Kotlin), this post will use plain old Java.</p><p>The Reactive Manifesto states that reactive systems are:</p><ul><li>responsive,</li><li>resilient,</li><li>elastic, and</li><li>message driven.</li></ul><p>Before we consider what that means in the context of Vert.x, let’s look at one of the simplest possible applications using Vert.x:</p><pre><code class="lang-java">package nl.kabisa.vertx;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Vertx;
+import io.vertx.core.http.HttpServerOptions;
+
+public class Application {
+
+    private static class HelloWorldVerticle extends AbstractVerticle {
+
+        @Override
+        public void start&#40;&#41; {
+            var options = new HttpServerOptions&#40;&#41;.setPort&#40;8080&#41;;
+            vertx.createHttpServer&#40;options&#41;
+                    .requestHandler&#40;request -&gt; request.response&#40;&#41;.end&#40;&quot;Hello world&quot;&#41;&#41;
+                    .listen&#40;&#41;;
+        }
+    }
+
+    public static void main&#40;String&#91;&#93; args&#41; {
+        Vertx.vertx&#40;&#41;.deployVerticle&#40;new HelloWorldVerticle&#40;&#41;&#41;;
+    }
+}
+</code></pre><p>When running this application, a single verticle is deployed when the statement <code class="language-java">Vertx.vertx().deployVerticle(new HelloWorldVerticle());</code> is executed. This verticle is an instance of the class <code>HelloWorldVerticle</code>. Each verticle has a <code>start</code> and a <code>stop</code> method. The <code>start</code> method is called when the verticle is deployed, and the <code>stop</code> method is called when the verticle is undeployed. In this example, we only provide an implementation for the <code>start</code> method and reuse the (empty) <code>stop</code> method of the class <code>AbstractVerticle</code>. When an instance of <code>HelloworldVerticle</code> is deployed, an HTTP server is created, which listens for incoming requests on port 8080. Each request is answered with the plain-text response “Hello world”.</p><h2>Responsive</h2><p>By default, Vert.x creates two threads per CPU core to deploy verticles like the one above. Each verticle is assigned to a specific thread, and all handlers of that verticle are executed on that thread sequentially. For the example above, this means that the handler <code class="language-java">request -> request.response().end("Hello world")</code> is always executed on the same thread.</p><p>Because the handlers for a given verticle are never executed concurrently, you don’t have to worry about locking or the atomicity of actions relevant for a single verticle. Multiple instances of the same verticle, however, <em>can</em> have their handlers executed at the same time. In fact, this holds for any two verticles. This means that if two verticles share a resource, you might still have to worry about concurrent access to that resource.</p><p>It’s your responsibility as a developer to ensure that a handler cannot occupy its assigned thread for too long. If you block a thread for too long, Vert.x will log a warning. The Vert.x developers took at it as their responsibility to ensure that no Vert.x API call will block a thread. As a result, a well-designed Vert.x application can handle a large amount of events using only a few threads, ultimately making such an application <em>responsive</em>.</p><h2>Message driven and resilient</h2><p>The example below shows an application consisting of two verticles. It illustrates Vert.x’s event bus. The event bus allows you to broadcast messages to any number of interested receivers as well as send messages to a single receiver. The broadcasted messages end up at each of the receivers registered for an address, whereas the messages sent directly end up at a single receiver.</p><p>In the example below, instances of the <code>WorldVerticle</code> are registered as consumers on the address <code>WORLD</code>. Instances of the <code>HelloVerticle</code> send messages to this address. If we would deploy multiple <code>WordVerticles</code>, each of them would receive messages in turn.</p><p>It’s possible to send messages in a number of different forms, including strings, booleans, JSON objects, and JSON arrays. Vert.x best-effort delivery, which means that message can get lost, but are never thrown away intentionally.</p><pre><code class="lang-java">package nl.kabisa.vertx;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Vertx;
+import io.vertx.core.http.HttpServerOptions;
+
+public class Application {
+
+    private static class HelloVerticle extends AbstractVerticle {
+
+        @Override
+        public void start&#40;&#41; {
+            var options = new HttpServerOptions&#40;&#41;.setPort&#40;8080&#41;;
+            vertx.createHttpServer&#40;options&#41;
+                    .requestHandler&#40;request -&gt;
+                            vertx.eventBus&#40;&#41;.send&#40;&quot;WORLD&quot;, &quot;Hello&quot;, ar -&gt; {
+                                if &#40;ar.succeeded&#40;&#41;&#41; {
+                                    request.response&#40;&#41;.end&#40;&#40;String&#41; ar.result&#40;&#41;.body&#40;&#41;&#41;;
+                                } else {
+                                    request.response&#40;&#41;.setStatusCode&#40;500&#41;.end&#40;ar.cause&#40;&#41;.getMessage&#40;&#41;&#41;;
+                                }
+                            }&#41;&#41;
+                    .listen&#40;&#41;;
+        }
+    }
+
+    private static class WorldVerticle extends AbstractVerticle {
+
+        @Override
+        public void start&#40;&#41; {
+            vertx.eventBus&#40;&#41;.consumer&#40;&quot;WORLD&quot;, event -&gt; event.reply&#40;event.body&#40;&#41; + &quot; world&quot;&#41;&#41;;
+        }
+    }
+
+    public static void main&#40;String&#91;&#93; args&#41; {
+        var vertx = Vertx.vertx&#40;&#41;;
+        vertx.deployVerticle&#40;new WorldVerticle&#40;&#41;&#41;;
+        vertx.deployVerticle&#40;new HelloVerticle&#40;&#41;&#41;;
+    }
+}
+</code></pre><p>The example shows that the sender of a message can specify an optional reply handler. The reply is provided to the handler in the form of an asynchronous result, which can either be succeeded or failed. If it succeeded, the actual reply message is available (<code class="language-java">ar.result()</code>, as shown in the example). Otherwise, a throwable is available that indicates what went wrong (<code class="language-java">ar.cause()</code>, also shown in the example).</p><p>I probably don’t need to tell you that this covers the <em>message driven</em> part of the Reactive Manifesto. Clearly, verticles can communicate via asynchronous message passing.</p><p>In a way, the example also illustrates <em>resilience</em>. If we would deploy multiple <code>WorldVerticles</code> and one of them would fail, the others would just keep on doing their jobs on their own thread. Additionally, the example shows how Vert.x reminds you to think about gracefully handling failure when implementing a handler. Many handlers receive their input in the form of an asynchronous result, which can always be succeeded or failed, as discussed above. Finally, and perhaps paradoxically, because of the best-effort delivery of messages via the event bus, you’re also forced to consciously deal with failure related to lost messages. If it’s paramount that a given type of message is always processed, you need to implement acknowledgements and retries.</p><h2>Elasticity</h2><p>As mentioned above, Vert.x creates two threads per available CPU core to deploy verticles like the ones shown above. If you need to handle more events (such as HTTP requests, for example), you can run your app on a machine with more CPU cores and reap the benefits of more concurrency, without any additional programming or configuration changes. Additionally, it’s possible to scale individual components of your application by simply deploying more or fewer verticles of a certain type. That sounds pretty <em>elastic</em> to me.</p><h2>Let’s go overboard 🚢</h2><p>If you have experience with callback-based asynchronous programming, you’ve probably also heard of callback hell. Callback hell is the term used to describe the type of programs that slowly but surely move to the right-hand side of your screen, where you’re dealing with callbacks inside callbacks, inside callbacks, inside callbacks, etc.</p><p>Take the following TCP client for example:</p><pre><code class="lang-java">package nl.kabisa.vertx.tcp;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import com.google.common.primitives.Bytes;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.buffer.Buffer;
+import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.eventbus.Message;
+import io.vertx.core.json.JsonObject;
+import io.vertx.core.net.NetClient;
+
+public class TcpClientVerticle extends AbstractVerticle {
+
+    public static final String REQUEST&#95;ADDRESS = &quot;tcp.client.request&quot;;
+
+    private static final Logger LOGGER = LogManager.getLogger&#40;&#41;;
+
+    private EventBus eventBus;
+    private NetClient authClient;
+    private NetClient echoClient;
+
+    private void handleEvent&#40;Message&lt;JsonObject&gt; event&#41; {
+        authClient.connect&#40;3001, &quot;localhost&quot;, asyncAuthSocket -&gt; {
+            if &#40;asyncAuthSocket.succeeded&#40;&#41;&#41; {
+                var authSocket = asyncAuthSocket.result&#40;&#41;;
+                authSocket.handler&#40;authBuffer -&gt; {
+                    if &#40;authBuffer.getByte&#40;0&#41; == 0&#41; {
+                        event.fail&#40;0, &quot;Invalid credentials&quot;&#41;;
+                    } else if &#40;authBuffer.getByte&#40;0&#41; == 2&#41; {
+                        event.fail&#40;0, &quot;Unexpected error&quot;&#41;;
+                    } else if &#40;authBuffer.getByte&#40;0&#41; == 1&#41; {
+                        var id = authBuffer.getBytes&#40;1, authBuffer.length&#40;&#41;&#41;;
+
+                        echoClient.connect&#40;3002, &quot;localhost&quot;, asyncEchoSocket -&gt; {
+                            if &#40;asyncEchoSocket.succeeded&#40;&#41;&#41; {
+                                var echoSocket = asyncEchoSocket.result&#40;&#41;;
+                                echoSocket.handler&#40;echoBuffer -&gt; {
+                                    if &#40;echoBuffer.getByte&#40;0&#41; == 0&#41; {
+                                        event.fail&#40;500, &quot;Unauthenticated&quot;&#41;;
+                                    } else if &#40;echoBuffer.getByte&#40;0&#41; == 1&#41; {
+                                        event.reply&#40;echoBuffer.getBuffer&#40;1, echoBuffer.length&#40;&#41;&#41;&#41;;
+                                    } else {
+                                        event.fail&#40;500, &quot;Unexpected response from echo service&quot;&#41;;
+                                    }
+                                }&#41;;
+                                echoSocket.write&#40;Buffer.buffer&#40;Bytes.concat&#40;id, event.body&#40;&#41;.getString&#40;&quot;body&quot;&#41;.getBytes&#40;&#41;&#41;&#41;&#41;;
+                            } else {
+                                String errorMessage = &quot;Unable to obtain socket for echo service&quot;;
+                                LOGGER.error&#40;errorMessage, asyncEchoSocket.cause&#40;&#41;&#41;;
+                                event.fail&#40;500, errorMessage&#41;;
+                            }
+                        }&#41;;
+                    } else {
+                        event.fail&#40;500, &quot;Unexpected response from authentication service&quot;&#41;;
+                    }
+                }&#41;;
+                authSocket.write&#40;Buffer.buffer&#40;new byte&#91;&#93; { 1, 2, 3, 4 }&#41;&#41;;
+            } else {
+                String errorMessage = &quot;Unable to obtain socket for authentication service&quot;;
+                LOGGER.error&#40;errorMessage, asyncAuthSocket.cause&#40;&#41;&#41;;
+                event.fail&#40;500, errorMessage&#41;;
+            }
+        }&#41;;
+    }
+
+    @Override
+    public void start&#40;&#41; {
+        LOGGER.info&#40;&quot;Starting&quot;&#41;;
+
+        eventBus = vertx.eventBus&#40;&#41;;
+        authClient = vertx.createNetClient&#40;&#41;;
+        echoClient = vertx.createNetClient&#40;&#41;;
+
+        eventBus.consumer&#40;REQUEST&#95;ADDRESS, this::handleEvent&#41;;
+    }
+}
+</code></pre><p>This verticle listens for messages on the address <code>tcp.client.request</code>. Each time a message arrives, the verticle authenticates itself with some service listening on port 3001 by exchanging some bytes. It uses the token it receives to communicate with some other service listening on port 3002. In the end, it replies to the initial message with a buffer containing an array of bytes received from the service listening on port 3002. You could argue that this isn’t the most beautiful piece of code ever written, although beauty lies in the eyes of the beholder.</p><p>(If you want to see the callback-based implementation of the rest of this application, by my guest: <a href="https://github.com/ljpengelen/vertx-demo/tree/971e33e4475a18fb7239d716a8c6d05369442b8a">https://github.com/ljpengelen/vertx-demo/tree/971e33e4475a18fb7239d716a8c6d05369442b8a</a>.)</p><h2>Futures</h2><p>JavaScript’s answer to callback hell were promises. Vert.x’s answer to callback hell are futures. A future represents the result of some computation that is potentially available at some later stage. A future can either succeed or fail. When it succeed, its result will be available. When it fails, a throwable representing the cause of failure will be available. You can set a handler for a future, which will be called with the asynchronous result when the future has succeeded or failed. There are different ways to combine futures into a single future, which we’ll illustrate with an example.</p><p>Suppose you want to deploy a number of verticles, and some of these verticles should only be deployed once others have been deployed successfully. Vert.x offers a deploy method with a callback, which is called when the deployment has finished. Without the use of futures, you could end up with code like this:</p><pre><code class="lang-java">package nl.kabisa.vertx;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import io.vertx.core.Vertx;
+import nl.kabisa.vertx.http.HttpServerVerticle;
+import nl.kabisa.vertx.tcp.&#42;;
+
+public class Application {
+
+    private static final Logger LOGGER = LogManager.getLogger&#40;&#41;;
+
+    private static Vertx vertx;
+
+    public static void main&#40;String&#91;&#93; args&#41; {
+        vertx = Vertx.vertx&#40;&#41;;
+
+        vertx.deployVerticle&#40;new AuthServiceVerticle&#40;&#41;, authServiceDeployment -&gt; {
+            if &#40;authServiceDeployment.succeeded&#40;&#41;&#41; {
+                vertx.deployVerticle&#40;new ScreamingEchoServiceVerticle&#40;&#41;, screamingEchoServiceDeployment -&gt; {
+                    if &#40;screamingEchoServiceDeployment.succeeded&#40;&#41;&#41; {
+                        vertx.deployVerticle&#40;new TcpClientVerticle&#40;&#41;, tcpClientDeployment -&gt; {
+                            if &#40;tcpClientDeployment.succeeded&#40;&#41;&#41; {
+                                vertx.deployVerticle&#40;new HttpServerVerticle&#40;&#41;, httpServerDeployment -&gt;
+                                    LOGGER.info&#40;&quot;All verticles started successfully&quot;&#41;&#41;;
+                            }
+                        }&#41;;
+                    }
+                }&#41;;
+            }
+        }&#41;;
+    }
+}
+</code></pre><p>This isn’t pretty at all, even without the additional code you need to deal with possible failures. Also, we’re deploying the verticles one at a time, while we actually want to deploy the <code>HttpServerVerticle</code> once the others have been deployed successfully.</p><p>Rewriting this example using futures leads to the following:</p><pre><code class="lang-java">package nl.kabisa.vertx;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import io.vertx.core.&#42;;
+import nl.kabisa.vertx.http.HttpServerVerticle;
+import nl.kabisa.vertx.tcp.&#42;;
+
+public class Application {
+
+    private static final Logger LOGGER = LogManager.getLogger&#40;&#41;;
+
+    private static Vertx vertx;
+
+    private static Future&lt;String&gt; deploy&#40;Vertx vertx, Verticle verticle&#41; {
+        Future&lt;String&gt; future = Future.future&#40;&#41;;
+        vertx.deployVerticle&#40;verticle, future&#41;;
+        return future;
+    }
+
+    public static void main&#40;String&#91;&#93; args&#41; {
+        LOGGER.info&#40;&quot;Starting&quot;&#41;;
+
+        vertx = Vertx.vertx&#40;&#41;;
+
+        CompositeFuture.all&#40;
+                deploy&#40;vertx, new AuthServiceVerticle&#40;&#41;&#41;,
+                deploy&#40;vertx, new ScreamingEchoServiceVerticle&#40;&#41;&#41;,
+                deploy&#40;vertx, new TcpClientVerticle&#40;&#41;&#41;&#41;
+                .compose&#40;s -&gt; deploy&#40;vertx, new HttpServerVerticle&#40;&#41;&#41;&#41;
+                .setHandler&#40;s -&gt; {
+                            if &#40;s.succeeded&#40;&#41;&#41; {
+                                LOGGER.info&#40;&quot;All verticles started successfully&quot;&#41;;
+                            } else {
+                                LOGGER.error&#40;&quot;Failed to deploy all verticles&quot;, s.cause&#40;&#41;&#41;;
+                            }
+                        }
+                &#41;;
+    }
+}
+</code></pre><p>Here, we deploy three verticles at the same time, and deploy the last one when the deployment of all the others succeeded. Again, beauty lies in the eyes of the beholder, but this is good enough for me.</p><p>Do you still remember the TCP client you saw above? Here’s the same client implemented using futures:</p><pre><code class="lang-java">package nl.kabisa.vertx.tcp;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import com.google.common.primitives.Bytes;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Future;
+import io.vertx.core.buffer.Buffer;
+import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.eventbus.Message;
+import io.vertx.core.json.JsonObject;
+import io.vertx.core.net.NetClient;
+import io.vertx.core.net.NetSocket;
+
+public class TcpClientVerticle extends AbstractVerticle {
+
+    public static final String REQUEST&#95;ADDRESS = &quot;tcp.client.request&quot;;
+
+    private static final Logger LOGGER = LogManager.getLogger&#40;&#41;;
+
+    private EventBus eventBus;
+    private NetClient authClient;
+    private NetClient echoClient;
+
+    private Future&lt;NetSocket&gt; connectToAuthService&#40;&#41; {
+        Future&lt;NetSocket&gt; future = Future.future&#40;&#41;;
+
+        authClient.connect&#40;3001, &quot;localhost&quot;, future&#41;;
+
+        return future;
+    }
+
+    private Future&lt;Buffer&gt; authenticate&#40;NetSocket authSocket&#41; {
+        Future&lt;Buffer&gt; future = Future.future&#40;&#41;;
+
+        authSocket.handler&#40;authBuffer -&gt; {
+            if &#40;authBuffer.getByte&#40;0&#41; == 0&#41; {
+                future.fail&#40;&quot;Invalid credentials&quot;&#41;;
+            } else if &#40;authBuffer.getByte&#40;0&#41; == 2&#41; {
+                future.fail&#40;&quot;Unexpected error&quot;&#41;;
+            } else if &#40;authBuffer.getByte&#40;0&#41; == 1&#41; {
+                future.complete&#40;authBuffer.getBuffer&#40;1, authBuffer.length&#40;&#41;&#41;&#41;;
+            } else {
+                future.fail&#40;&quot;Unexpected response from authentication service&quot;&#41;;
+            }
+        }&#41;;
+
+        authSocket.write&#40;Buffer.buffer&#40;new byte&#91;&#93; { 1, 2, 3, 4 }&#41;&#41;;
+
+        return future;
+    }
+
+    private Future&lt;NetSocket&gt; connectToEchoClient&#40;&#41; {
+        Future&lt;NetSocket&gt; future = Future.future&#40;&#41;;
+
+        echoClient.connect&#40;3002, &quot;localhost&quot;, future&#41;;
+
+        return future;
+    }
+
+    private Future&lt;Buffer&gt; forwardToEchoClient&#40;NetSocket echoSocket, Buffer token, String input&#41; {
+        Future&lt;Buffer&gt; future = Future.future&#40;&#41;;
+
+        echoSocket.handler&#40;echoBuffer -&gt; {
+            if &#40;echoBuffer.getByte&#40;0&#41; == 0&#41; {
+                future.fail&#40;&quot;Unauthenticated&quot;&#41;;
+            } else if &#40;echoBuffer.getByte&#40;0&#41; == 1&#41; {
+                future.complete&#40;echoBuffer.getBuffer&#40;1, echoBuffer.length&#40;&#41;&#41;&#41;;
+            } else {
+                future.fail&#40;&quot;Unexpected response from echo service&quot;&#41;;
+            }
+        }&#41;;
+        echoSocket.write&#40;Buffer.buffer&#40;Bytes.concat&#40;token.getBytes&#40;&#41;, input.getBytes&#40;&#41;&#41;&#41;&#41;;
+
+        return future;
+    }
+
+    private void handleEvent&#40;Message&lt;JsonObject&gt; event&#41; {
+        connectToAuthService&#40;&#41;
+                .compose&#40;this::authenticate&#41;
+                .compose&#40;token -&gt; connectToEchoClient&#40;&#41;
+                        .compose&#40;socket -&gt; forwardToEchoClient&#40;socket, token, event.body&#40;&#41;.getString&#40;&quot;body&quot;&#41;&#41;&#41;&#41;
+                .setHandler&#40;asyncBuffer -&gt; {
+                    if &#40;asyncBuffer.succeeded&#40;&#41;&#41; {
+                        event.reply&#40;asyncBuffer.result&#40;&#41;&#41;;
+                    } else {
+                        event.fail&#40;500, asyncBuffer.cause&#40;&#41;.getMessage&#40;&#41;&#41;;
+                    }
+                }&#41;;
+    }
+
+    @Override
+    public void start&#40;&#41; {
+        LOGGER.info&#40;&quot;Starting&quot;&#41;;
+
+        eventBus = vertx.eventBus&#40;&#41;;
+        authClient = vertx.createNetClient&#40;&#41;;
+        echoClient = vertx.createNetClient&#40;&#41;;
+
+        eventBus.consumer&#40;REQUEST&#95;ADDRESS, this::handleEvent&#41;;
+    }
+}
+</code></pre><p>Although I still have to look closely to see what the handleEvent method is doing exactly, I hope we can agree that this is an improvement over the callback-based implementation. In my opinion, it’s clearer what each part of the implementation is responsible for and which parts are related.</p><h2>Conclusion</h2><p>By looking at these few examples, you’ve seen part of what Vert.x has to offer. However, it doesn’t end with what’s described here. <a href='https://vertx.io/docs/'>Vert.x’s documentation page</a> offers a comprehensive list of books, manuals, and API docs that covers the complete toolkit. There’s also a page listing <a href='http://vertx.io/materials/'>learning materials</a> that should help you get started.</p><p>If you’re interested in the toolkit, you should definitely play around with the example application available at <a href="https://github.com/ljpengelen/vertx-demo/">https://github.com/ljpengelen/vertx-demo/</a>. Besides a few other verticles apart from those described here, there are a number of tests that should give you an impression of what Vert.x has to offer.</p><p>Once you get the hang of it, developing applications with Vert.x is quite enjoyable. As with all forms of asynchronous programming, however, I sometimes find myself in slightly annoying situations where a synchronous approach would be much easier to implement and reason about. The question is whether you’re willing to put up with a little extra work to enjoy the potential benefits of reactive systems.</p>]]>
+    </content>
+  </entry>
+  <entry>
+    <id>https://blog.cofx.nl/immutable-objects-in-python.html</id>
+    <link href="https://blog.cofx.nl/immutable-objects-in-python.html"/>
+    <title>Immutable objects in Python</title>
+    <updated>2019-08-01T23:59:59+00:00</updated>
+    <content type="html">
+      <![CDATA[<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>To keep programs easy to reason about, I try to avoid side effects and aim for a functional style of programming using immutable objects. I’m happy to trade a few CPU cycles for a reduced demand of brain power.</p><p>Because we’re talking about Python here, and <a href='https://docs.python-guide.org/writing/style/#we-are-all-responsible-users'>we’re all responsible users</a>, it’s impossible to create actual <em>objects</em> that are <em>impossible</em> to mutate. You can, however, create things that behave like objects that are impossible to mutate or actual objects that cannot be mutated by mistake.</p><p>Let’s look at three ways to do this and how they differ.</p><h2>Named Tuples</h2><p>The Python project I’m currently working on started before <a href='https://docs.python.org/3/library/dataclasses.html'>data classes</a> were available. Additionally, this project is created for a client that prefers the use of as few dependencies as possible. In that context, the following class for points emerged:</p><pre><code class="lang-python">from collections import namedtuple
+
+
+class Point&#40;namedtuple&#40;&quot;&#95;Point&quot;, &#91;&quot;x&quot;, &quot;y&quot;&#93;&#41;&#41;:
+    def scale&#40;self, scale&#41;:
+        return Point&#40;self.x &#42; scale, self.y &#42; scale&#41;
+
+    def translate&#40;self, dx, dy&#41;:
+        return Point&#40;self.x + dx, self.y + dy&#41;
+</code></pre><p>It’s a class for points in two-dimensional space. When you call the <code>scale</code> or <code>translate</code> method, a new point is returned. This variant of the class extends a named tuple <code>&#95;Point</code> consisting of two fields named <code>x</code> and <code>y</code>.</p><p>When you try to mutate an instance of this class, you’ll be greeted with an <code>AttributeError</code>:</p><pre><code class="lang-python">&gt;&gt;&gt; from collections import namedtuple
+&gt;&gt;&gt; Point = namedtuple&#40;&quot;&#95;Point&quot;, &#91;&quot;x&quot;, &quot;y&quot;&#93;&#41;
+&gt;&gt;&gt; p = Point&#40;1, 2&#41;
+&gt;&gt;&gt; p.x
+1
+&gt;&gt;&gt; p.x = 2
+Traceback &#40;most recent call last&#41;:
+  File &quot;&lt;stdin&gt;&quot;, line 1, in &lt;module&gt;
+AttributeError: can't set attribute
+</code></pre><p>That looks pretty much like immutability to me. One of the downsides of this approach is that <code>p</code> isn’t an actual object. It’s a tuple.</p><pre><code class="lang-python">&gt;&gt;&gt; SomethingCompletelyDifferent = namedtuple&#40;&quot;SomethingCompletelyDifferent&quot;, &quot;a b&quot;&#41;
+&gt;&gt;&gt; a = SomethingCompletelyDifferent&#40;1, 2&#41;
+&gt;&gt;&gt; p == a
+True
+&gt;&gt;&gt; p == &#40;1, 2&#41;
+True
+</code></pre><p>Depending on how you’re using instances of this class, this could be a big deal. The documentation for the <a href='https://www.attrs.org/en/stable/index.html'>attrs</a> package list <a href='https://www.attrs.org/en/stable/why.html#namedtuples'>a few more downsides</a>.</p><h2>Attrs</h2><p>If you don’t mind dependencies, you could use the aforementioned <a href='https://www.attrs.org/en/stable/index.html'>attrs</a> package and do this:</p><pre><code class="lang-python">import attr
+
+
+@attr.s&#40;frozen=True&#41;
+class Point:
+    x = attr.ib&#40;&#41;
+    y = attr.ib&#40;&#41;
+
+    def scale&#40;self, scale&#41;:
+        return Point&#40;self.x &#42; scale, self.y &#42; scale&#41;
+
+    def translate&#40;self, dx, dy&#41;:
+        return Point&#40;self.x + dx, self.y + dy&#41;
+</code></pre><p>In this case, the decorator <code>@attr.s&#40;frozen=True&#41;</code> dictates that values of <code>x</code> and <code>y</code> cannot be changed by simple assignments. This behaves like you expect it to:</p><pre><code class="lang-python">&gt;&gt;&gt; import attr
+&gt;&gt;&gt; @attr.s&#40;frozen=True&#41;
+... class Point:
+...     x = attr.ib&#40;&#41;
+...     y = attr.ib&#40;&#41;
+...
+&gt;&gt;&gt; p = Point&#40;1, 2&#41;
+&gt;&gt;&gt; p.x
+1
+&gt;&gt;&gt; p.x = 2
+Traceback &#40;most recent call last&#41;:
+  File &quot;&lt;stdin&gt;&quot;, line 1, in &lt;module&gt;
+  File &quot;/Users/lucengelen/.local/share/virtualenvs/python-immutable-1HIt&#95;5XS/lib/python3.7/site-packages/attr/&#95;make.py&quot;, line 428, in &#95;frozen&#95;setattrs
+    raise FrozenInstanceError&#40;&#41;
+attr.exceptions.FrozenInstanceError
+&gt;&gt;&gt; p == &#40;1, 2&#41;
+False
+&gt;&gt;&gt; p == Point&#40;1, 2&#41;
+True
+&gt;&gt;&gt; p == Point&#40;2, 1&#41;
+False
+</code></pre><p>You can still mutate instances of this class, but not by accident:</p><pre><code class="lang-python">&gt;&gt;&gt; p = Point&#40;1, 2&#41;
+&gt;&gt;&gt; p.&#95;&#95;dict&#95;&#95;&#91;&quot;x&quot;&#93; = 100
+&gt;&gt;&gt; p
+Point&#40;x=100, y=2&#41;
+</code></pre><h2>Data Classes</h2><p>Since Python 3.7, you can use <a href='https://docs.python.org/3/library/dataclasses.html'>data classes</a> to achieve something similar to the variant using <a href='https://www.attrs.org/en/stable/index.html'>attrs</a>:</p><pre><code class="lang-python">from dataclasses import dataclass
+
+
+@dataclass&#40;frozen=True&#41;
+class Point:
+    x: int
+    y: int
+
+    def scale&#40;self, scale&#41;:
+        return Point&#40;self.x &#42; scale, self.y &#42; scale&#41;
+
+    def translate&#40;self, dx, dy&#41;:
+        return Point&#40;self.x + dx, self.y + dy&#41;
+</code></pre><p>Here, the decorator <code>@dataclass&#40;frozen=True&#41;</code> dictates that the values of <code>x</code> and <code>y</code> cannot be changed by simple assignments. This also behaves like you would expect:</p><pre><code class="lang-python">&gt;&gt;&gt; from dataclasses import dataclass
+&gt;&gt;&gt; @dataclass&#40;frozen=True&#41;
+... class Point:
+...     x: int
+...     y: int
+...
+&gt;&gt;&gt; p = Point&#40;1, 2&#41;
+&gt;&gt;&gt; p.x = 100
+Traceback &#40;most recent call last&#41;:
+  File &quot;&lt;stdin&gt;&quot;, line 1, in &lt;module&gt;
+  File &quot;&lt;string&gt;&quot;, line 3, in &#95;&#95;setattr&#95;&#95;
+dataclasses.FrozenInstanceError: cannot assign to field 'x'
+&gt;&gt;&gt; p = Point&#40;1, 2&#41;
+&gt;&gt;&gt; p == Point&#40;1, 2&#41;
+True
+&gt;&gt;&gt; p == Point&#40;2, 1&#41;
+False
+&gt;&gt;&gt; p == &#40;1, 2&#41;
+False
+</code></pre><p>You can mutate instances in the same way as above, but I won’t believe you if say you did this by mistake.</p><h2>Conclusion</h2><p>If you want to play around with these variants, you could use the Python shell. You could also take a look at the following repo: <a href='https://github.com/ljpengelen/immutable-python-objects'>https://github.com/ljpengelen/immutable-python-objects</a>.</p><p>My personal conclusion after reviewing these variants is that I won’t replace all the named tuples in existing projects just yet. I don’t expect to get burned by the unfortunate behavior concerning equality. For future projects, however, I’ll probably go with data classes.</p>]]>
+    </content>
+  </entry>
+  <entry>
+    <id>https://blog.cofx.nl/sending-data-to-the-other-side.html</id>
+    <link href="https://blog.cofx.nl/sending-data-to-the-other-side.html"/>
+    <title>Sending Data to the Other Side of the World: JSON vs Protocol Buffers and REST vs gRPC</title>
+    <updated>2019-02-19T23:59:59+00:00</updated>
+    <content type="html">
+      <![CDATA[<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>For a project I’m working on, I wanted to know which protocol and data representation would be best to transfer relatively large amounts of data between microservices. At first, I just wanted to see whether using <a href='https://developers.google.com/protocol-buffers/'>protocol buffers</a> to represent data would lead to smaller response sizes compared to compressed JSON. Once I was looking into protocol buffers, I wondered when it would be better to choose <a href='https://grpc.io/'>gRPC</a> over REST.</p><h2>Protocol Buffers</h2><p>As <a href='https://developers.google.com/protocol-buffers/'>Google puts it</a>, protocol buffers are a language-neutral, platform-neutral extensible mechanism for serializing structured data. Given the definition below, code to efficiently serialize and deserialize compact representations of lists of vectors can be generated for a number of programming languages.</p><pre><code class="lang-protobuf">syntax = &quot;proto3&quot;;
+
+package vectors;
+
+message Point {
+    double x = 1;
+    double y = 2;
+    double z = 3;
+}
+
+message Vector {
+    Point start = 1;
+    Point end = 2;
+}
+
+message Vectors {
+    repeated Vector vectors = 1;
+}
+</code></pre><p>As you can see in the definition above, the data is typed. That is an advantage over JSON if you ask me. Because of the large number of supported programming languages, you can exchange protocol buffers between apps written in many languages.</p><h2>gRPC</h2><p><a href='https://grpc.io/'>gRPC</a> is a high-performance, open-source universal framework for remote procedure calls. If you extend the definition above with declarations like the ones below, code can be generated that allows client applications to call methods of server applications in a way that compares to calling local methods.</p><pre><code class="lang-protobuf">service VectorService {
+    rpc GetVectorStream&#40;VectorsRequest&#41; returns &#40;stream Vector&#41; {}
+    rpc GetVectors&#40;VectorsRequest&#41; returns &#40;Vectors&#41; {}
+}
+
+message VectorsRequest {
+    int64 seed = 1;
+    int32 number&#95;of&#95;vectors = 2;
+}
+</code></pre><p>You implement the actual service by extending the base implementation generated from the definition. The following code shows an example implementation in Java.</p><pre><code class="lang-java">@GRpcService
+public class VectorsService extends VectorServiceGrpc.VectorServiceImplBase {
+
+    private final VectorGenerator vectorGenerator;
+
+    @Autowired
+    public VectorsService&#40;VectorGenerator vectorGenerator&#41; {
+        this.vectorGenerator = vectorGenerator;
+    }
+
+    @Override
+    public void getVectors&#40;VectorProto.VectorsRequest request, StreamObserver&lt;VectorProto.Vectors&gt; responseObserver&#41; {
+        responseObserver.onNext&#40;toProto&#40;vectorGenerator.generateRandomVectors&#40;request.getSeed&#40;&#41;, request.getNumberOfVectors&#40;&#41;&#41;&#41;&#41;;
+        responseObserver.onCompleted&#40;&#41;;
+    }
+
+    @Override
+    public void getVectorStream&#40;VectorProto.VectorsRequest request, StreamObserver&lt;VectorProto.Vector&gt; responseObserver&#41; {
+        vectorGenerator.generateRandomVectors&#40;request.getSeed&#40;&#41;, request.getNumberOfVectors&#40;&#41;&#41;.forEach&#40;vector -&gt; responseObserver.onNext&#40;toProto&#40;vector&#41;&#41;&#41;;
+        responseObserver.onCompleted&#40;&#41;;
+    }
+}
+</code></pre><p>The following implementation of a consumer gives an example of how such a remote procedure is called by a client.</p><pre><code class="lang-java">@Component
+public class VectorsServiceConsumer {
+
+    public void getVectors&#40;String hostname, int port, long seed, int numberOfVectors&#41; {
+        var managedChannel = ManagedChannelBuilder.forAddress&#40;hostname, port&#41;.usePlaintext&#40;&#41;.build&#40;&#41;;
+        var blockingStub = VectorServiceGrpc.newBlockingStub&#40;managedChannel&#41;;
+        var vectorsRequest = VectorProto.VectorsRequest.newBuilder&#40;&#41;
+                .setNumberOfVectors&#40;numberOfVectors&#41;
+                .setSeed&#40;seed&#41;
+                .build&#40;&#41;;
+
+        var response = blockingStub.getVectors&#40;vectorsRequest&#41;;
+
+        response.getVectorsList&#40;&#41;;
+
+        managedChannel.shutdown&#40;&#41;;
+    }
+
+    public void getVectorStream&#40;String hostname, int port, long seed, int numberOfVectors&#41; {
+        var managedChannel = ManagedChannelBuilder.forAddress&#40;hostname, port&#41;.usePlaintext&#40;&#41;.build&#40;&#41;;
+        var blockingStub = VectorServiceGrpc.newBlockingStub&#40;managedChannel&#41;;
+        var vectorsRequest = VectorProto.VectorsRequest.newBuilder&#40;&#41;
+                .setNumberOfVectors&#40;numberOfVectors&#41;
+                .setSeed&#40;seed&#41;
+                .build&#40;&#41;;
+
+        var response = blockingStub.getVectorStream&#40;vectorsRequest&#41;;
+
+        while &#40;response.hasNext&#40;&#41;&#41; {
+            response.next&#40;&#41;;
+        }
+
+        managedChannel.shutdown&#40;&#41;;
+    }
+}
+</code></pre><h2>Some Experiments</h2><p>To see some practical results and learn about the implementation details, I created a Spring Boot application that sends and receives data via REST and gRPC. If you want to do your own experiments, you could use that app as a starting point:</p><p><a href="https://github.com/ljpengelen/RPC">https://github.com/ljpengelen/RPC</a></p><p>The data exchanged by this app is a list of vectors with random start and end points. Represented as JSON, a vector looks as follows.</p><pre><code class="lang-json">{
+  &quot;start&quot;: {
+    &quot;x&quot;: 0.730967787376657,
+    &quot;y&quot;: 0.24053641567148587,
+    &quot;z&quot;: 0.6374174253501083
+  },
+  &quot;end&quot;: {
+    &quot;x&quot;: 0.5504370051176339,
+    &quot;y&quot;: 0.5975452777972018,
+    &quot;z&quot;: 0.3332183994766498
+  }
+}
+</code></pre><h2>Response Size</h2><p>The table below shows the response size in kilobytes when requesting a list of vectors of a given size via REST, using three different representations. As you can see from the table, if compression of responses is enabled on the server, it doesn’t matter much whether you choose for JSON or protocol buffers to represent your data. As far as response size is concerned, you might as well keep things simple and stick with JSON.</p><p>One reason to prefer protocol buffers over compressed JSON would be that protocol buffers are typed. Additionally, if you use a framework such as Spring Boot, you have to define <a href='https://en.wikipedia.org/wiki/Data_transfer_object'>data transfer objects</a> to represent the requests and responses of your REST endpoints. With protocol buffers, these are generated for you.</p><table><thead><tr><th style='text-align:right'>Number of vectors</th><th style='text-align:right'>JSON</th><th style='text-align:right'>Compressed JSON</th><th style='text-align:right'>Protocol Buffers</th></tr></thead><tbody><tr><td style='text-align:right'>1.000</td><td style='text-align:right'>156</td><td style='text-align:right'>59</td><td style='text-align:right'>59</td></tr><tr><td style='text-align:right'>10.000</td><td style='text-align:right'>1.520</td><td style='text-align:right'>576</td><td style='text-align:right'>586</td></tr><tr><td style='text-align:right'>100.000</td><td style='text-align:right'>15.220</td><td style='text-align:right'>5.600</td><td style='text-align:right'>5.720</td></tr></tbody></table><h2>Speed</h2><p>To compare the amount of time it takes to exchange lists of vectors via REST and gRPC, I’ve set up two virtual machines on AWS. Both machines had type <code>t2.small</code> (<a href="https://aws.amazon.com/ec2/instance-types/">https://aws.amazon.com/ec2/instance-types/</a>) and ran Linux and Java 11. One was located in Frankfurt and the other in Sydney. I was communicating with these machines from my local machine in Eindhoven, a 2017 MacBook Pro with a 2.8 GHz Intel Core i7 processor and 16 GB of RAM.</p><p>The table below shows the amount of time in milliseconds it takes to retrieve a list (or stream) of 10.000 vectors 10 times in a row. The two columns labelled “REST” show how much time it takes to exchange data represented as JSON and protocol buffers. With gRPC, data is always represented as protocol buffers. The two columns labelled “gRPC” show how much time it takes to transfer multiple vectors as a list and as a stream.</p><table><thead><tr><th style='text-align:left'>Client</th><th style='text-align:left'>Server</th><th style='text-align:right'>REST JSON</th><th style='text-align:right'>REST Protobuf</th><th style='text-align:right'>gRPC List</th><th style='text-align:right'>gRPC Stream</th></tr></thead><tbody><tr><td style='text-align:left'>Eindhoven</td><td style='text-align:left'>Eindhoven</td><td style='text-align:right'>326</td><td style='text-align:right'>77</td><td style='text-align:right'>118</td><td style='text-align:right'>1.764</td></tr><tr><td style='text-align:left'>Eindhoven</td><td style='text-align:left'>Frankfurt</td><td style='text-align:right'>883</td><td style='text-align:right'>665</td><td style='text-align:right'>1.689</td><td style='text-align:right'>2.430</td></tr><tr><td style='text-align:left'>Eindhoven</td><td style='text-align:left'>Sydney</td><td style='text-align:right'>16.161</td><td style='text-align:right'>11.658</td><td style='text-align:right'>55.457</td><td style='text-align:right'>57.537</td></tr><tr><td style='text-align:left'>Frankfurt</td><td style='text-align:left'>Sydney</td><td style='text-align:right'>6.531</td><td style='text-align:right'>4.930</td><td style='text-align:right'>22.730</td><td style='text-align:right'>22.864</td></tr><tr><td style='text-align:left'>Sydney</td><td style='text-align:left'>Frankfurt</td><td style='text-align:right'>7.276</td><td style='text-align:right'>4.589</td><td style='text-align:right'>22.745</td><td style='text-align:right'>26.161</td></tr><tr><td style='text-align:left'>Frankfurt</td><td style='text-align:left'>Frankfurt</td><td style='text-align:right'>980</td><td style='text-align:right'>170</td><td style='text-align:right'>287</td><td style='text-align:right'>1.120</td></tr><tr><td style='text-align:left'>Sydney</td><td style='text-align:left'>Sydney</td><td style='text-align:right'>1.021</td><td style='text-align:right'>257</td><td style='text-align:right'>368</td><td style='text-align:right'>1.189</td></tr></tbody></table><p>The last three rows are included as a sort of sanity check. I would expect the numbers for <code>Frankfurt -&gt; Frankfurt</code> to be comparable to those for <code>Sydney -&gt; Sydney</code> (because we’re essentially doing the exact same thing) and a little worse than those for <code>Eindhoven -&gt; Eindhoven</code> (because my laptop is faster than the ec2 instances). This seems to be the case. I would also expect <code>Frankfurt -&gt; Sydney</code> to be comparable to <code>Sydney -&gt; Frankfurt</code>, which is also the case.</p><p>The results might give the impression that there’s little reason to prefer gRPC over REST. This is caused by the fact that we’re not using gRPC to its fullest potential. For this experiment, we’re using blocking communication and don’t process the stream of vectors vector by vector. In real-world scenarios, however, it might be benificial to use asynchronous communication, and deal with input and output as streams.</p><h2>Conclusion</h2><p>To conclude, here are some bullet points with simplistic advice:</p><ul><li>If you only care about response size, use REST and JSON, enable compression, and call it a day.</li><li>If you want your data to be typed and keep things simple, use REST and protocol buffers.</li><li>If you want to handle your input and output as streams, use gRPC.</li></ul>]]>
+    </content>
+  </entry>
+  <entry>
+    <id>https://blog.cofx.nl/jenkinsfiles-for-beginners-and-masochists.html</id>
+    <link href="https://blog.cofx.nl/jenkinsfiles-for-beginners-and-masochists.html"/>
+    <title>Jenkinsfiles for Beginners and Masochists</title>
+    <updated>2019-01-16T23:59:59+00:00</updated>
+    <content type="html">
+      <![CDATA[<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>Because <a href='https://jenkins.io/'>Jenkins</a> is one of the biggest names in the field of tools for continuous integration and continuous delivery, it probably needs no introduction. Because you probably read <a href='https://www.theguild.nl/building-github-pull-requests-using-jenkins-pipelines/'>every letter on theguild.nl</a>, <a href='https://jenkins.io/doc/book/pipeline/'>Pipelines</a> and <a href='https://jenkins.io/doc/book/pipeline/jenkinsfile/'>Jenkinsfiles</a> also need no introduction. In case you forgot, Jenkinsfiles provide a way to declaratively specify continuous-delivery pipelines, which are automated expressions of your process for getting software from version control right through to your users and customers, as <a href='https://jenkins.io/doc/book/pipeline/'>Jenkins puts it</a>. You can keep Jenkinsfiles in the repositories of the apps they test and deploy. When Jenkins finds such a file in a repository, it will set up the pipeline defined in the file and run it. This allows developers to manage the pipelines for their apps without dealing with Jenkins itself.</p><p>If you have limited experience with Jenkins, I’d advise you to run it locally right away and take a look. If you’re running <a href='https://www.docker.com/'>Docker</a>, the simplest way to run Jenkins is by means of a script like the following.</p><pre><code class="lang-sh">#!/bin/sh
+docker pull jenkinsci/blueocean
+docker run -u root --rm -d \
+  -p 8080:8080 \
+  -p 50000:50000 \
+  -v jenkins-data:/var/jenkins&#95;home \
+  -v jenkins-root:/root \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /Users/lucengelen/Repositories:/Users/lucengelen/Repositories \
+  jenkinsci/blueocean
+</code></pre><p>When you compare this script with the <a href='https://jenkins.io/doc/book/installing/#docker'>installation instructions provided by Jenkins</a>, you’ll see some differences. First, I’ve added <code>docker pull jenkinsci/blueocean</code> to ensure that I always use the latest version of the Docker image for Jenkins. Additionally, I’ve added the command-line arguments <code>-v jenkins-root:/root</code> and <code>-v /Users/lucengelen/Repositories:/Users/lucengelen/Repositories</code>. The first ensures that SSH keys are preserved when a new Docker image for Jenkins is built. The second ensures that the folder where I keep my repositories is accessible from within the Docker container. You should modify this line to match your situation (or move your repositories to <code>/Users/lucengelen/Repositories</code>).</p><p>After you’ve executed the commands above, you’ll be able to visit <a href='http://localhost:8080/'>http://localhost:8080</a> in the browser and see Jenkins’ post-installation setup wizard. Jenkins asks you to enter a key that you can find in its logs, which you can inspect by running <code>docker logs &lt;CONTAINER&#95;ID&gt;</code>, where <code>&lt;CONTAINER&#95;ID&gt;</code> is the long string displayed after the docker run command is finished.</p><p>Once you’re done with the setup, create a new job in Jenkins with the type “Multibranch Pipeline”. Give this job a source of type “Git” and point it to the repository <a href='https://github.com/ljpengelen/jenkinsfile'>https://github.com/ljpengelen/jenkinsfile</a>. You’ll see that Jenkins discovers the Jenkinsfile in the root of the repository and tries to run a pipeline for the branches <code>master</code> and <code>staging</code>. This will fail for a number of reasons, but that’s okay.</p><h2>Starting From Scratch</h2><p>When experimenting with Jenkins, it’s often convenient to be able to test changes to a Jenkinsfile without pushing to a remote repository. If Jenkins is pulling a remote repository for changes, it will only see the that you’ve pushed. Using a file URL for a local repository enables you to iterate faster. Assuming that you’ve clone the repository mentioned above into the folder <code>/Users/lucengelen/Repositories/jenkinsfile</code>, you can create a second multibranch-pipeline job and point it to the repository <code>file:///Users/lucengelen/Repositories/jenkinsfile</code>, for example.</p><p>After you’ve done this for the folder were you’ve cloned the repository, replace the content of the Jenkinsfile in the root of the repository to the following and commit your changes.</p><pre><code class="lang-groovy">pipeline {
+  agent none
+
+  stages {
+    stage&#40;&quot;Test back end&quot;&#41; {
+      agent {
+        dockerfile {
+          filename &quot;back-end/dockerfiles/ci/Dockerfile&quot;
+        }
+      }
+
+      steps {
+        sh &quot;cd back-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Test front end&quot;&#41; {
+      agent {
+        dockerfile {
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+        }
+      }
+
+      steps {
+        sh &quot;rm -f front-end/node&#95;modules &amp;&amp; ln -s /app/node&#95;modules front-end/node&#95;modules&quot;
+        sh &quot;cd front-end &amp;&amp; bin/ci&quot;
+      }
+    }
+  }
+}
+</code></pre><p>If you’ve committed these changes on a new branch, you need to ask Jenkins to scan your multibranch pipeline again. If you’ve committed them to an existing branch, you can just start a new build for that branch. You’ll see that this build succeeds.</p><p>The tests and linters for both apps are executed inside Docker containers. The dependencies for both apps are installed inside these containers. This way, Docker takes care of the caching.</p><p>By default, Yarn looks for dependencies in a folder named <code>node&#95;modules</code> in the root of your project folder. The command <code>cd front-end &amp;&amp; bin/ci</code> is executed in the folder where Jenkins has checked out your repository. As part of the build of the Docker image for the front end, however, the dependencies are installed in the folder <code>/app/node&#95;modules</code>. This explains the presence of the command <code>rm -f front-end/node&#95;modules &amp;&amp; ln -s /app/node&#95;modules front-end/node&#95;modules</code>. There’s a Yarn-specific way of configuring an alternative location of the node_modules folder, but it didn’t work for me. Since this is also a post for masochists, feel free to experiment with it.</p><h2>Shooting Yourself in the Foot</h2><p>You can tell Jenkins to run (parts of) your pipelines on a specific node. You do this by specifying a label for an agent in your pipeline. The steps for this particular agent will then be executed on a node with the given label. Modify your Jenkinsfile as follows.</p><pre><code class="lang-groovy">pipeline {
+  agent none
+
+  stages {
+    stage&#40;&quot;Test back end&quot;&#41; {
+      agent {
+        dockerfile {
+          filename &quot;back-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;cd back-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Test front end&quot;&#41; {
+      agent {
+        dockerfile {
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;rm -f front-end/node&#95;modules &amp;&amp; ln -s /app/node&#95;modules front-end/node&#95;modules&quot;
+        sh &quot;cd front-end &amp;&amp; bin/ci&quot;
+      }
+    }
+  }
+}
+</code></pre><p>If you trigger a new build, you’ll probably see it fail because there’s no agent with the label “webapps”. Introduce a new agent by visiting <a href='http://localhost:8080/computer/new'>http://localhost:8080/computer/new</a>, choosing a name, and selecting “permanent agent”. On the next page, specify a remote root directory, set the label to “webapps”, and the host to “localhost” or your computer’s hostname. If you’re on a Mac, you’ll have to <a href='https://www.booleanworld.com/access-mac-ssh-remote-login/'>allow remote access via SSH to your machine</a>. Provide your credentials for logging in via SSH.</p><p>If you’ve followed all these steps, you should now be able to run the pipeline, right? In the end, you’re just executing the steps on your local machine, just like you were doing before. If you’re working on a Mac, you’ll quickly find that new builds still fail. For some reason, Docker is not available, and you’ll see a line ending with <code>script.sh: line 1: docker: command not found</code> in the console output of your pipeline.</p><p>If you go to the command line and execute the following command, you’ll understand what’s going on.</p><pre><code class="lang-shell-session">ssh localhost &quot;echo \$PATH&quot;
+</code></pre><p>This will result in something like <code>/usr/bin:/bin:/usr/sbin:/sbin</code>. Be sure to escape the dollar sign because the result of the following command will only add to the confusion.</p><pre><code class="lang-shell-session">ssh localhost &quot;echo $PATH&quot;
+</code></pre><p>If you run commands like we do above, you end up in a non-interactive, non-login shell. This is also what Jenkins is doing when it’s executing the steps of the agents in our Jenkinsfile. In such a shell, you have a different path than in the interactive login shell that you work in when you open a terminal. On a Mac, the Docker executable is located at <code>/usr/local/bin/docker</code>, which is not in the path of the non-interactive, non-login shell.</p><p>To fix this, go back to the configuration of the node you just added and add <code>PATH=$PATH:/usr/local/bin &amp;&amp;</code> as the value for the input “Prefix Start Agent Command” that is part of the advanced settings.</p><p>Because we’re just experimenting with Jenkins, there’s no real reason to shoot yourself in the foot like this. You could leave out the label or configure your main node to run jobs with this label. I just wanted to warn you about this pitfall in case you ever encountered it in the real world.</p><h2>Continuous Delivery</h2><p>To keep experimenting along, you’ll need an instance of Dokku running somewhere. Coincidentally, there’s a blog post about setting up an instance of <a href='https://www.theguild.nl/setting-up-dokku-on-azure-with-terraform-and-ansible-a-guided-tour/'>Dokku on Azure</a> that is almost perfect for the Jenkinsfile below. You only have to open port 8000 instead of 8080. You may also have to pick another prefix for your hostnames if the ones below are taken.</p><pre><code class="lang-groovy">dokkuHostname = &quot;kabisa-dokku-demo-staging.westeurope.cloudapp.azure.com&quot;
+if &#40;env.BRANCH&#95;NAME == &quot;production&quot;&#41; {
+  dokkuHostname = &quot;kabisa-dokku-demo-production.westeurope.cloudapp.azure.com&quot;
+}
+
+pipeline {
+  agent none
+
+  stages {
+    stage&#40;&quot;Test back end&quot;&#41; {
+      agent {
+        dockerfile {
+          filename &quot;back-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;cd back-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Test front end&quot;&#41; {
+      agent {
+        dockerfile {
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;rm -f front-end/node&#95;modules &amp;&amp; ln -s /app/node&#95;modules front-end/node&#95;modules&quot;
+        sh &quot;cd front-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Deploy back end&quot;&#41; {
+      agent {
+        label &quot;webapps&quot;
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;git push -f dokku@${dokkuHostname}:back-end HEAD:refs/heads/master&quot;
+      }
+    }
+
+    stage&#40;&quot;Build front end&quot;&#41; {
+      agent {
+        dockerfile {
+          args &quot;-e 'API&#95;BASE&#95;URL=http://${dokkuHostname}:8000/api'&quot;
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;cd front-end &amp;&amp; yarn build&quot;
+      }
+    }
+
+    stage&#40;&quot;Deploy front end&quot;&#41; {
+      agent {
+        label &quot;webapps&quot;
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;rm -rf deploy-front-end&quot;
+        sh &quot;git clone dokku@${dokkuHostname}:front-end deploy-front-end&quot;
+        sh &quot;rm -rf deploy-front-end/dist&quot;
+        sh &quot;mkdir -p deploy-front-end/dist&quot;
+        sh &quot;cp -R front-end/dist/&#42; deploy-front-end/dist&quot;
+        sh &quot;touch deploy-front-end/.static&quot;
+        sh &quot;cd deploy-front-end &amp;&amp; git add . &amp;&amp; git commit -m \&quot;Deploy\&quot; --allow-empty &amp;&amp; git push -f&quot;
+      }
+    }
+  }
+}
+</code></pre><p>If you want the pipeline above to be successful, you need to configure SSH in the Docker container running Jenkins so that it uses the right keys. Execute <code>docker exec -it &lt;CONTAINER&#95;ID&gt; /bin/sh</code> to enter the container, store the keys somewhere, create the file <code>/root/.ssh/config</code> if it doesn’t exist yet, and add the following lines to point SSH to the right keys.</p><pre><code class="lang-sh">Host kabisa-dokku-demo-staging.westeurope.cloudapp.azure.com
+  IdentityFile &#126;/.ssh/azure&#95;dokku&#95;git&#95;staging
+
+Host kabisa-dokku-demo-production.westeurope.cloudapp.azure.com
+  IdentityFile &#126;/.ssh/azure&#95;dokku&#95;git&#95;production
+</code></pre><p>Modify the hostnames and key names in this example to match your situation.</p><h2>Better Safe than Sorry</h2><p>Unless you tell Docker otherwise, it will do as little work as possible when building an image. It caches the result of each build step of a Dockerfile that it has executed before and uses the result for each new build. If a new version of the base image you’re using becomes available that conflicts with your app, however, you won’t notice that when running the tests in a container using an image that is built upon the older, cached version of the base image.</p><p>You can instruct Docker to look for newer verions of your base image during a build with the command-line argument <code>--pull</code>. Because new base images are only available once in a while, it’s not really wasteful to use this argument all the time when building images. This is what we’re doing in the Jenkinsfile below.</p><pre><code class="lang-groovy">additionalBuildArgs = &quot;--pull&quot;
+if &#40;env.BRANCH&#95;NAME == &quot;master&quot;&#41; {
+  additionalBuildArgs = &quot;--pull --no-cache&quot;
+}
+
+dokkuHostname = &quot;kabisa-dokku-demo-staging.westeurope.cloudapp.azure.com&quot;
+if &#40;env.BRANCH&#95;NAME == &quot;production&quot;&#41; {
+  dokkuHostname = &quot;kabisa-dokku-demo-production.westeurope.cloudapp.azure.com&quot;
+}
+
+pipeline {
+  agent none
+
+  triggers {
+    cron&#40;env.BRANCH&#95;NAME == 'master' ? '@weekly' : ''&#41;
+  }
+
+  stages {
+    stage&#40;&quot;Test back end&quot;&#41; {
+      agent {
+        dockerfile {
+          additionalBuildArgs &quot;${additionalBuildArgs}&quot;
+          filename &quot;back-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;cd back-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Test front end&quot;&#41; {
+      agent {
+        dockerfile {
+          additionalBuildArgs &quot;${additionalBuildArgs}&quot;
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;rm -f front-end/node&#95;modules &amp;&amp; ln -s /app/node&#95;modules front-end/node&#95;modules&quot;
+        sh &quot;cd front-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Deploy back end&quot;&#41; {
+      agent {
+        label &quot;webapps&quot;
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+    }
+
+    stage&#40;&quot;Build front end&quot;&#41; {
+      agent {
+        dockerfile {
+          args &quot;-e 'API&#95;BASE&#95;URL=http://${dokkuHostname}:8000/api'&quot;
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      when {
+        beforeAgent true
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;cd front-end &amp;&amp; yarn build&quot;
+      }
+    }
+
+    stage&#40;&quot;Deploy front end&quot;&#41; {
+      agent {
+        label &quot;webapps&quot;
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;rm -rf deploy-front-end&quot;
+        sh &quot;git clone dokku@${dokkuHostname}:front-end deploy-front-end&quot;
+        sh &quot;rm -rf deploy-front-end/dist&quot;
+        sh &quot;mkdir -p deploy-front-end/dist&quot;
+        sh &quot;cp -R front-end/dist/&#42; deploy-front-end/dist&quot;
+        sh &quot;touch deploy-front-end/.static&quot;
+        sh &quot;cd deploy-front-end &amp;&amp; git add . &amp;&amp; git commit -m \&quot;Deploy\&quot; --allow-empty &amp;&amp; git push -f&quot;
+      }
+    }
+  }
+}
+</code></pre><p>You may have noticed that there’s also a command-line argument <code>--no-cache</code> in this Jenkinsfile, which is only used on the master branch. This command-line argument instructs Docker to not use any caching at all when building an image. This means that Docker will download and install all dependencies when building an image. If there’s something wrong when any of your dependencies, you’ll find out right away. This is a good way of ensuring that your Docker containers can be built from scratch, but it would be a waste of resources and bandwith to build images like this for every commit. In the Jenkinsfile above, images are only built from scratch on the <code>master</code> branch. This ensures that you’ll find out that something is wrong with your Docker image when you merge features to <code>master</code>. To ensure that you’re also notified in case of issues when an app is no longer in active development, a trigger is added to build the <code>master</code> branch once every week.</p><p>The line <code>beforeAgent true</code> in the when clause of the stage “Build front end” ensures that the Docker image used to build the front end is only built when new changes are pushed to the branches <code>staging</code> and <code>production</code>. Without this line, the image would always be built, regardless of the branch. The when clause would only prevent the steps from being executed. This is mostly gold plating of the Jenkinsfile, since the same image is used to run the tests for the front end and build it, which means that the second Docker build would use cached data anyway.</p><p>Because the same container is used for testing and building the front end, the additional arguments for the Docker build command are left out for the build step.</p><h2>Shooting Yourself in the Foot Again</h2><p>So far, some potential issues were masked because we’ve been running Jenkins as root. In other real-life scenarios, Jenkins will not always be running as root, however. If you run the <a href='https://jenkins.io/doc/book/installing/#war-file'>WAR-file version of Jenkins</a>, for example, the Jenkins process would be running as the user that executed <code>java -jar jenkins.war</code> on the command line. When you execute a new build in that scenario, you’ll find that it fails again. The user that’s executing commands in the Docker container for the front end doesn’t have the right access rights. I advise all masochists to try this at home and watch it fail.</p><p>We can easily fix this by explicitly instructing Docker to use the root user again, as shown below.</p><pre><code class="lang-groovy">additionalBuildArgs = &quot;--pull&quot;
+if &#40;env.BRANCH&#95;NAME == &quot;master&quot;&#41; {
+  additionalBuildArgs = &quot;--pull --no-cache&quot;
+}
+
+dokkuHostname = &quot;kabisa-dokku-demo-staging.westeurope.cloudapp.azure.com&quot;
+if &#40;env.BRANCH&#95;NAME == &quot;production&quot;&#41; {
+  dokkuHostname = &quot;kabisa-dokku-demo-production.westeurope.cloudapp.azure.com&quot;
+}
+
+pipeline {
+  agent none
+
+  triggers {
+    cron&#40;env.BRANCH&#95;NAME == 'master' ? '@weekly' : ''&#41;
+  }
+
+  stages {
+    stage&#40;&quot;Test back end&quot;&#41; {
+      agent {
+        dockerfile {
+          additionalBuildArgs &quot;${additionalBuildArgs}&quot;
+          filename &quot;back-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;cd back-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Test front end&quot;&#41; {
+      agent {
+        dockerfile {
+          additionalBuildArgs &quot;${additionalBuildArgs}&quot;
+          args &quot;-u root&quot;
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;rm -f front-end/node&#95;modules &amp;&amp; ln -s /app/node&#95;modules front-end/node&#95;modules&quot;
+        sh &quot;cd front-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Deploy back end&quot;&#41; {
+      agent {
+        label &quot;webapps&quot;
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;git push -f dokku@${dokkuHostname}:back-end HEAD:refs/heads/master&quot;
+      }
+    }
+
+    stage&#40;&quot;Build front end&quot;&#41; {
+      agent {
+        dockerfile {
+          args &quot;-u root -e 'API&#95;BASE&#95;URL=http://${dokkuHostname}:8000/api'&quot;
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      when {
+        beforeAgent true
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;cd front-end &amp;&amp; yarn build&quot;
+      }
+    }
+
+    stage&#40;&quot;Deploy front end&quot;&#41; {
+      agent {
+        label &quot;webapps&quot;
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;rm -rf deploy-front-end&quot;
+        sh &quot;git clone dokku@${dokkuHostname}:front-end deploy-front-end&quot;
+        sh &quot;rm -rf deploy-front-end/dist&quot;
+        sh &quot;mkdir -p deploy-front-end/dist&quot;
+        sh &quot;cp -R front-end/dist/&#42; deploy-front-end/dist&quot;
+        sh &quot;touch deploy-front-end/.static&quot;
+        sh &quot;cd deploy-front-end &amp;&amp; git add . &amp;&amp; git commit -m \&quot;Deploy\&quot; --allow-empty &amp;&amp; git push -f&quot;
+      }
+    }
+  }
+</code></pre><p>The test and build steps for the front end are now executed as root, which seems to work great at first sight. In fact, due to some peculiarities related to file permission of Docker for Mac, it works great on Mac, period.</p><p>If you feel that seeing is believing or have lots of time to kill, boot up a Linux (virtual) machine, install Docker and Jenkins, set up a multibranch project again, and start a new build. Afterwards, visit Jenkins’ workspace for the project and check the file permissions. You’ll notice that some files and folders have been created that are owned by root. Because Jenkins isn’t running as root, it is not allowed to delete these files when the time comes to clean up the workspace for your project. For your own amusement, it’s also worthwhile to check that you don’t have this issue on Macs.</p><p>To prevent Jenkins from running out of disk space in the future, we need to make sure that the files and folders created as root can be deleted by Jenkins. There are a number of ways to do this, but one way that doesn’t require any additional configuration of Jenkins is demonstrated in the final version of our Jenkinsfile.</p><pre><code class="lang-groovy">additionalBuildArgs = &quot;--pull&quot;
+if &#40;env.BRANCH&#95;NAME == &quot;master&quot;&#41; {
+  additionalBuildArgs = &quot;--pull --no-cache&quot;
+}
+
+dokkuHostname = &quot;kabisa-dokku-demo-staging.westeurope.cloudapp.azure.com&quot;
+if &#40;env.BRANCH&#95;NAME == &quot;production&quot;&#41; {
+  dokkuHostname = &quot;kabisa-dokku-demo-production.westeurope.cloudapp.azure.com&quot;
+}
+
+pipeline {
+  agent none
+
+  triggers {
+    cron&#40;env.BRANCH&#95;NAME == 'master' ? '@weekly' : ''&#41;
+  }
+
+  stages {
+    stage&#40;&quot;Test back end&quot;&#41; {
+      agent {
+        dockerfile {
+          additionalBuildArgs &quot;${additionalBuildArgs}&quot;
+          filename &quot;back-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;cd back-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Test front end&quot;&#41; {
+      agent {
+        dockerfile {
+          additionalBuildArgs &quot;${additionalBuildArgs}&quot;
+          args &quot;-u root&quot;
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;rm -f front-end/node&#95;modules &amp;&amp; ln -s /app/node&#95;modules front-end/node&#95;modules&quot;
+        sh &quot;cd front-end &amp;&amp; bin/ci&quot;
+      }
+
+      post {
+        always {
+          sh &quot;chown -R \$&#40;stat -c '%u:%g' .&#41; \$WORKSPACE&quot;
+        }
+      }
+    }
+
+    stage&#40;&quot;Deploy back end&quot;&#41; {
+      agent {
+        label &quot;webapps&quot;
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;git push -f dokku@${dokkuHostname}:back-end HEAD:refs/heads/master&quot;
+      }
+    }
+
+    stage&#40;&quot;Build front end&quot;&#41; {
+      agent {
+        dockerfile {
+          args &quot;-u root -e 'API&#95;BASE&#95;URL=http://${dokkuHostname}:8000/api'&quot;
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      when {
+        beforeAgent true
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;cd front-end &amp;&amp; yarn build&quot;
+      }
+
+      post {
+        always {
+          sh &quot;chown -R \$&#40;stat -c '%u:%g' .&#41; \$WORKSPACE&quot;
+        }
+      }
+    }
+
+    stage&#40;&quot;Deploy front end&quot;&#41; {
+      agent {
+        label &quot;webapps&quot;
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;rm -rf deploy-front-end&quot;
+        sh &quot;git clone dokku@${dokkuHostname}:front-end deploy-front-end&quot;
+        sh &quot;rm -rf deploy-front-end/dist&quot;
+        sh &quot;mkdir -p deploy-front-end/dist&quot;
+        sh &quot;cp -R front-end/dist/&#42; deploy-front-end/dist&quot;
+        sh &quot;touch deploy-front-end/.static&quot;
+        sh &quot;cd deploy-front-end &amp;&amp; git add . &amp;&amp; git commit -m \&quot;Deploy\&quot; --allow-empty &amp;&amp; git push -f&quot;
+      }
+    }
+  }
+</code></pre><p>After the test and build step, we change the owner of all files in the workspace to whoever owns the workspace, which is Jenkins.</p><h2>Conclusion</h2><p>If you ask me, there are two important conclusions to be drawn from this port. First, Jenkinsfiles are a powerful and convenient tool for continuous integration and continuous delivery. Second, one instance of Jenkins can be very different from another. You can’t take a Jenkinsfile from one project to another and expect it to work right away. I hope that some of the pitfalls described in this post point you in the right direction when you run into trouble in the future.</p>]]>
+    </content>
+  </entry>
+  <entry>
+    <id>https://blog.cofx.nl/dokku-on-azure-with-terraform-and-ansible.html</id>
+    <link href="https://blog.cofx.nl/dokku-on-azure-with-terraform-and-ansible.html"/>
+    <title>Setting up Dokku on Azure with Terraform and Ansible: a Guided Tour</title>
+    <updated>2019-01-10T23:59:59+00:00</updated>
+    <content type="html">
+      <![CDATA[<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>This post provides a guided tour of the Terraform configuration and Ansible playbooks in the following repository: <a href='https://github.com/ljpengelen/dokku-on-azure'>https://github.com/ljpengelen/dokku-on-azure</a>.</p><p>If you follow all the steps described in README.md, you’ll be able to deploy a static front end and a back end defined by any Dockerfile, simply by pushing code to some Git repositories. The end result is a virtual machine on <a href='https://azure.microsoft.com/'>Microsoft Azure</a> running <a href='http://dokku.viewdocs.io/dokku/'>Dokku</a>, an open-source platform as a service. efore we start the guided tour, let’s start with some why’s.</p><p><strong>Why would you want to do a deployment by pushing to a repository?</strong> If <em>you</em> can deploy an application by pushing to a repository, then so can tools for continuous integration and deployment, such as <a href='https://jenkins.io/'>Jenkins</a>. Even in environments with strict firewall policies, tools like Jenkins should always be able to interact with repositories, without any additional plugins and with little effort. This makes setting up continuous deployment easy.</p><p><strong>Why use Dokku as a platform as a service?</strong> Similar functionality can be achieved with <a href='https://www.heroku.com/'>Heroku</a> and <a href='https://azure.microsoft.com/en-us/services/app-service/containers/'>Azure web apps for containers</a>. This type of managed solutions comes with the additional benefit of limited to no maintenance costs. However, they also come with a considerable price tag if you’re deploying resource-hungry applications. Running a VM with about 16GB of RAM will cost you around 100 dollars per month, whereas a similar amount of RAM will cost around 500 dollars if you use a managed service. Clearly, performing maintenance is not free and puts the burden of securing your infrastructure on you. That could be something you’re very willing to pay for.</p><p><strong>Why use Terraform to manage infrastructure as code?</strong> Terraform is not the only tool that allows you to manage infrastructure as code. You could use vendor-specific tools, such as <a href='https://docs.microsoft.com/en-us/azure/templates/'>Azure Resource Manager templates</a> and <a href='https://aws.amazon.com/cloudformation/'>AWS CloudFormation</a> instead, for example. The benefit of using Terraform is that it is one single tool you can use to manage infrastructure hosted by <a href='https://www.terraform.io/docs/providers/index.html'>many different providers</a>.</p><h2>Terraform</h2><p>You can use Terraform to manage infrastructure, such as virtual machines, by means of declarative descriptions of the desired end result. These descriptions are called configurations. Terraform keeps track of the current state of the infrastructure and is able to determine which (incremental) changes are required when a configuration changes. This state can be stored online and shared between developers.</p><p>The module <a href='https://github.com/ljpengelen/dokku-on-azure/blob/master/terraform/modules/azure_vm/main.tf'>azure_vm</a> in the <a href='https://github.com/ljpengelen/dokku-on-azure'>repository accompanying this post</a> defines which infrastructure we want to set up on Azure to end up with a publicly accessible virtual machine running Ubuntu. Part of this module is shown below.</p><pre><code class="lang-hcl">variable &quot;admin&#95;username&quot; {}
+
+...
+
+variable &quot;vm&#95;size&quot; {
+  default = &quot;Standard&#95;B1S&quot;
+}
+
+variable &quot;http&#95;whitelist&#95;ip&#95;ranges&quot; {
+  default = &#91;&quot;0.0.0.0/0&quot;&#93;
+}
+
+...
+
+data &quot;azurerm&#95;resource&#95;group&quot; &quot;main&quot; {
+  name = &quot;${var.resource&#95;group&#95;name}&quot;
+}
+
+...
+
+resource &quot;azurerm&#95;public&#95;ip&quot; &quot;main&quot; {
+  name = &quot;${var.env}-public-ip&quot;
+  location = &quot;${data.azurerm&#95;resource&#95;group.main.location}&quot;
+  resource&#95;group&#95;name = &quot;${data.azurerm&#95;resource&#95;group.main.name}&quot;
+  public&#95;ip&#95;address&#95;allocation = &quot;static&quot;
+  domain&#95;name&#95;label = &quot;${var.domain&#95;name&#95;label&#95;prefix}-${var.env}&quot;
+}
+</code></pre><p>This module uses a number of <a href='https://www.terraform.io/docs/configuration/variables.html'>variables</a>. These variables can be strings, lists, or maps, where string is the default type. The variables <code>admin&#95;username</code> and <code>vm&#95;size</code> have type strings. It’s possible to specify default values for variables, which are used when no value is declared for the variable at some other point in the configuration. The variable <code>http&#95;whitelist&#95;ip&#95;ranges</code> has a list as default value, from which Terraform is able to imply that this variable has the type list.</p><p>For each environment, there’s a configuration file that provides the values for the variables of this module for the given environment. The file <a href='https://github.com/ljpengelen/dokku-on-azure/blob/master/terraform/dev/main.tf'>main.tf</a>, for example, provides value for the development environment.</p><p>The module above also contains a <a href='https://www.terraform.io/docs/configuration/data-sources.html'>data source</a>, which is used to fetch data about an existing Azure resource group with a given name. This data source is used to define the location (<code>location = &quot;${data.azurerm&#95;resource&#95;group.main.location}&quot;</code>) and resource group name (<code>resource&#95;group&#95;name = &quot;${data.azurerm&#95;resource&#95;group.main.name}&quot;</code>) of resources that are defined elsewhere in the configuration.</p><p>The most important part of a Terraform configuration are its <a href='https://www.terraform.io/docs/configuration/resources.html'>resources</a>. In the partial example above, a resource defining a <a href='https://www.terraform.io/docs/providers/azurerm/r/public_ip.html'>public ip</a> is used. Terraform has <a href='https://www.terraform.io/docs/providers/azurerm/index.html'>documentation</a> for each type of Azure resource you’d want to create. If you look at the <a href='https://github.com/ljpengelen/dokku-on-azure/blob/master/terraform/modules/azure_vm/main.tf'>complete module</a>, you’ll see that it declares resources representing a virtual machine, a network security group, a virtual network, and so on.</p><p>Although there are multiple ways to <a href='https://tosbourn.com/hiding-secrets-terraform/'>hide secrects in Terraform</a>, I’ve chosen to keep things simple and just keep the secrets out of version control entirely.</p><p>I’ve chosen to use three separate and independent configurations for the <a href='https://github.com/ljpengelen/dokku-on-azure/blob/master/terraform/dev/main.tf'>development</a>, <a href='https://github.com/ljpengelen/dokku-on-azure/blob/master/terraform/staging/main.tf'>staging</a>, and <a href='https://github.com/ljpengelen/dokku-on-azure/blob/master/terraform/production/main.tf'>production</a> environments, which all use the module described above. This is not necessarily the Terraform way of doing things, but it has the benefit of being able to manage all environments independently. If you upgrade the configuration, you’ll be able to test the effects of that change on one environment, while leaving the others intact.</p><h2>Ansible</h2><p>After you’ve set up your infrastructure with Terraform, you can use Ansible to automate the installation of software on the virtual machines that are part of that infrastructure. In essence, Ansible is a tool that connects to remote machines via SSH and performs various actions on these machines. In contrast to similar tools, Ansible doesn’t try to abstract from the operating system running on the remote machine. For example, this means that when you connect to a remote machine running Ubuntu, you have to upgrade packages using Ansible tasks specific to <code>apt</code>, but if you connect to a remote machine running CentOS, you have to upgrade packages using tasks specific to <code>yum</code>.</p><p>The installation and configuration process that Ansible is supposed to execute is described in the form of playbooks. A playbook consists of a number of roles and tasks, as shown below.</p><pre><code class="lang-yaml">---
+- hosts: dokku
+  vars:
+    dokku&#95;version: v0.14.0
+    ports:
+      - 80
+      - 8080
+  remote&#95;user: &quot;{{ admin&#95;username }}&quot;
+  roles:
+    - print&#95;affected&#95;hosts
+    - upgrade&#95;apt&#95;packages
+    - secure&#95;server
+    - install&#95;dokku
+  tasks:
+  - name: Install dokku-dockerfile plugin
+    become: yes
+    command: dokku plugin:install https://github.com/mimischi/dokku-dockerfile.git
+    args:
+      creates: /var/lib/dokku/plugins/available/dockerfile
+</code></pre><p>Each role is a collection of tasks, and each task is an atomic action, often corresponding to the execution of a single command.</p><p>The playbook above is quite simple. It prints the hostname(s) of the machine(s) that Ansible is connecting to, upgrades packages, sets up a firewall, installs Dokku, and installs the <a href='https://github.com/mimischi/dokku-dockerfile'>dokku-dockerfile plugin</a>. At the start of the playbook, a variable representing the Dokku version to install and one representing the list of ports to open are declared. The playbook also states that Ansible should use the value of the variable <code>admin&#95;username</code> as username when connecting to the machine it is configuring via SSH. This variable is environment specific and defined elsewhere.</p><p>Although Ansible provides a <a href='https://docs.ansible.com/ansible/latest/user_guide/vault.html'>vault</a> to be able to keep encrypted secrets in version control, I’ve again chosen to keep things simple and keep secrets out of version control entirely.</p><h2>Dokku</h2><p>The Ansible playbook <a href='https://github.com/ljpengelen/dokku-on-azure/blob/master/ansible/dokku_apps.yml'>dokku_apps.yml</a> configures two apps named “front-end” and “back-end”. Dokku provides a Git repository for each of these apps. Pushing to one of these repositories will trigger the deployment of the corresponding app.</p><p>The <a href='https://github.com/dokku/buildpack-nginx'>nginx buildpack</a> is used to deploy the front end as a static website. It is triggered by the presence of a file called <code>.static</code> in the root of the repository. To be able to clone the repository for this app before the initial push, this repository is initialized as part of the configuration with Ansible. This makes the initial deployment the same as all the following ones, which in turn simplifies setting up continuous deployment.</p><pre><code class="lang-yaml">- name: Initialize repositories for static apps
+  command: dokku git:initialize {{ item.name }}
+  args:
+    creates: /home/dokku/{{ item.name }}/branches
+  when: item.static
+  with&#95;items: &quot;{{ apps }}&quot;
+</code></pre><p>By default, the nginx buildpack serves files from the root of the repository. The following command executed by Ansible ensures that nginx uses the dist folder as root instead.</p><pre><code class="lang-yaml">- name: Configure nginx for static apps
+  command: dokku config:set {{ item.name }} NGINX&#95;ROOT=dist
+  when: item.static
+  with&#95;items: &quot;{{ apps }}&quot;
+</code></pre><p>By default, static apps are exposed on a random port after the first deployment. Specifying a fixed port is also part of the configuration with Ansible.</p><pre><code class="lang-yaml">- name: Configure ports for static apps
+  command: dokku proxy:ports-add {{ item.name }} http:{{ item.port }}:5000
+  when: item.static
+  with&#95;items: &quot;{{ apps }}&quot;
+</code></pre><p>The back end is deployed by creating a Docker container from a Dockerfile in the corresponding repository. By default, Dokku looks in the root of this repository for the Dockerfile. To support monorepos and keep the root of the repository clean, we use the <a href='https://github.com/mimischi/dokku-dockerfile'>dokku-dockerfile plugin</a>. This instructs Dokku to look for the Dockerfile in <code>dockerfiles/deploy</code>.</p><pre><code class="lang-yaml">tasks:
+- name: Configure dokku-dockerfile plugin
+  command: dokku dockerfile:set back-end dockerfiles/deploy/Dockerfile
+</code></pre><h2>Conclusion</h2><p>I’ve written this post for anyone in the situation I was in about a year ago. If you’ve never worked with Azure, Terraform, or Ansible, I hope this post lowers the barrier to get started. I also hope that this post triggers some discussions about best practises. If you see any room for improvement or want to share your opinion about this topic, be my guest!</p>]]>
+    </content>
+  </entry>
+  <entry>
+    <id>https://blog.cofx.nl/pdfs-from-markdown-and-css.html</id>
+    <link href="https://blog.cofx.nl/pdfs-from-markdown-and-css.html"/>
+    <title>Good-looking PDFs with CSS for Paged Media and Markdown</title>
+    <updated>2018-12-13T23:59:59+00:00</updated>
+    <content type="html">
+      <![CDATA[<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>Before I started making money as a web developer, I was a web developer making money as a PhD student. Like many others in academia, I used <a href='https://www.latex-project.org/'>LaTeX</a> for most of the documents I produced. I wrote a number of research papers with LaTeX, a <a href='https://github.com/ljpengelen/latex-phd-thesis'>PhD thesis</a>, and when it was time to leave academia behind, I wrote a <a href='https://github.com/ljpengelen/latex-cv'>CV</a> with LaTeX. Suffice to say, I’m a big fan.</p><p>If you’ve never heard of LaTex, consider the following document:</p><pre><code class="lang-latex">\documentclass{article}
+\usepackage&#91;pdfborder={0 0 0}&#93;{hyperref}
+\title{Good-looking PDFs with CSS for Paged Media and Markdown}
+\author{Luc Engelen}
+\begin{document}
+   \maketitle
+   Transforming your Markdown documents into good-looking,
+   printable PDFs isn't hard and can even be free.
+   All you need is a Markdown-to-HTML converter, such as
+   \href{https://python-markdown.github.io/}{Python-Markown},
+   a CSS style sheet,
+   and a rendering tool that supports the CSS module for paged media,
+   such as \href{https://weasyprint.org/}{WeasyPrint}.
+\end{document}
+</code></pre><p>The end result of typesetting this annotated piece of text will look like this:</p><p><img src="assets/md-to-pdf/latex.png" alt="Text that has been typeset with LaTeX" /></p><p>LaTeX is advertised as a high-quality typesetting system, a claim that I can only agree with. It’s really nice to be able to focus on the textual content and structure of documents and leave most of the appearance to a specialized tool. An added benefit of writing documents in (annotated) plain text is that you can easily track changes in documents using version-control system such as Git. Although you <em>can</em> collaborate on Word or Pages documents, for example, nothing beats tracking changes commit-by-commit with line-by-line diffs or working on the same document in parallel on different branches. Once you know what you’re doing, LaTeX is great.</p><p>LaTeX is also, however, a massive piece of software that takes quite some time to get to know. If you don’t really need professional-quality typesetting or don’t plan to include a lot of mathematical formulas in your documents, it’s hard to justify installing three gigabytes of software and spending many hours to get to know this particular tool.</p><p>At <a href='https://kabisa.nl/'>Kabisa</a>, we use Google Docs is to create resumes, quotations, etc. Collaborating on these documents works reasonably well, and the end results are fine. Inspired by LaTeX and static site generators, I looked around a few times to see whether we could use <a href='https://daringfireball.net/projects/markdown/'>Markdown</a> as a basis for this sort of documents instead, hoping to improve both collaboration and the looks of the end results. Things didn’t look very promising for a long time, until I stumbled upon <a href='https://weasyprint.org/'>WeasyPrint</a> by coincidence.</p><h2>WeasyPrint</h2><p>WeasyPrint is free and open-source software that you can use to generate PDF documents from HTML and CSS. Clearly, you could simply print a webpage to PDF in any browser, but you don’t have any control over the styling of page numbers in that case, and you can’t define headers and footers. WeasyPrint supports a CSS module for which browser support is limited: <a href='https://www.w3.org/TR/css-page-3/'>CSS for Paged Media</a>. Although browsers do support the CSS properties <a href='https://developer.mozilla.org/en-US/docs/Web/CSS/page-break-after'>page-break-after</a>, <a href='https://developer.mozilla.org/en-US/docs/Web/CSS/page-break-before'>page-break-before</a>, and <a href='https://developer.mozilla.org/en-US/docs/Web/CSS/page-break-inside'>page-break-inside</a> from this modules, they don’t support the CSS rules for <a href='https://www.w3.org/TR/css-page-3/#margin-boxes'>page-margin boxes</a>. It’s the latter set of rules that make it possible to define and style headers and footers, page numbers, covers, and so on. The end results you can achieve with this subset of CSS is quite impressive, as can be seen by looking at the samples <a href='https://weasyprint.org/samples/'>provided by WeasyPrint</a>.</p><p>There are a number of <a href='https://print-css.rocks/tools.html'>competitors</a>, but most of them are far from free. <a href='https://vivliostyle.org/'>Vivliostyle</a> is a notable exception that’s also worth looking into.</p><h2>CSS for Paged Media</h2><p>Among other things, CSS for paged media allows you to target specific parts of the margin around each page. For example, the <code>@top-right</code> rule below specifies that the top-right part of the margin of each page should contain a logo.</p><pre><code class="lang-css">@page {
+  @top-right {
+    background: url&#40;kabisa-logo-two-color.svg&#41; no-repeat bottom;
+    background-size: 5cm;
+    content: &quot;&quot;;
+    width: 5cm;
+  }
+}
+</code></pre><p>The <code>@bottom-right</code> rule below specifies that the bottom-right part of the margin of each page should display the page number and the total number of pages. The counters <code>page</code> and <code>pages</code> are available by default, but it’s also possible to define custom counters.</p><pre><code class="lang-css">@page {
+  @bottom-right {
+    content: counter&#40;page&#41; &quot; of &quot; counter&#40;pages&#41;;
+  }
+}
+</code></pre><p>The <code>@bottom-center</code> rule below specifies that the center of each bottom margin should contain the value of the string heading. The value of this string is updated each time an <code>h2</code> element is encountered. The property <code>page-break-before</code> is an example of a CSS property that most browsers do support. It is used to ensure that each <code>h2</code> element starts a new page.</p><pre><code class="lang-css">@page {
+  @bottom-center {
+    content: string&#40;heading&#41;;
+  }
+}
+
+h2 {
+  page-break-before: always;
+  string-set: heading content&#40;&#41;;
+}
+</code></pre><p>These examples only show part of what you can achieve with CSS for paged media. Rachel Andrews provided <a href='https://www.smashingmagazine.com/2015/01/designing-for-print-with-css/'>an excellent overview</a> of all the possibilities for Smashing Magazine.</p><h2>Markdown</h2><p>Being able to style HTML for print with CSS is only a part of the story if you’re looking for a convenient way to write good-looking documents. I suppose most people wouldn’t be to enthusiastic about writing documents in plain HTML. HTML is fine for web pages, but markup languages such as <a href='http://docutils.sourceforge.net/rst.html'>reStructuredText</a>, <a href='http://asciidoc.org/'>AsciiDoc</a>, and <a href='https://daringfireball.net/projects/markdown/'>Markdown</a> are better suited for documents like reports, CVs, quotations, notes, and books. Although there’s not a clear winner among these three for me personally, I decided to build some tooling around <a href='https://python-markdown.github.io/'>Python-Markdown</a> because Markdown seems to be the most popular.</p><p>If you’ve never heard about Markdown, consider the following document:</p><pre><code class="lang-md"># Good-looking PDFs with CSS for Paged Media and Markdown
+
+Transforming your Markdown documents into good-looking,
+printable PDFs isn't hard and can even be free.
+All you need is
+
+&#42; a Markdown-to-HTML converter, such as
+&#91;Python-Markown&#93;&#40;https://python-markdown.github.io/&#41;,
+&#42; a CSS style sheet, and
+&#42; a rendering tool that supports the CSS module for paged media,
+such as &#91;WeasyPrint&#93;&#40;https://weasyprint.org/&#41;.
+</code></pre><p>Markdown converts this annotated text into the following HTML:</p><pre><code class="lang-html">&lt;h1&gt;Good-looking PDFs with CSS for Paged Media and Markdown&lt;/h1&gt;
+&lt;p&gt;
+  Transforming your Markdown documents into good-looking,
+  printable PDFs isn't hard and can even be free.
+  All you need is
+&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;
+    a Markdown-to-HTML converter, such as
+    &lt;a href=&quot;https://python-markdown.github.io/&quot;&gt;Python-Markown&lt;/a&gt;,
+  &lt;/li&gt;
+  &lt;li&gt;a CSS style sheet, and&lt;/li&gt;
+  &lt;li&gt;
+    a rendering tool that supports the CSS module for paged media,
+    such as &lt;a href=&quot;https://weasyprint.org/&quot;&gt;WeasyPrint&lt;/a&gt;.
+  &lt;/li&gt;
+&lt;/ul&gt;
+</code></pre><p>There’s an extension for Python-Markdown, <a href='https://python-markdown.github.io/extensions/attr_list/'>Attribute Lists</a>, that allows you to define attributes on the HTML elements in Markdown’s output. This extension comes in handy when you want to apply CSS to the resulting HTML.</p><h2>A Script to Tie These Tools Together</h2><p>I’ve created a <a href='https://github.com/ljpengelen/markdown-to-pdf'>Python script</a> that ties Python-Markdown and WeasyPrint together, including <a href='https://github.com/ljpengelen/markdown-to-pdf/tree/master/examples'>two examples</a> that demonstrate the possibilities of this tool chain. You can use this script to convert documents in one go or to watch a Markdown document and a CSS style sheet for changes and convert them on the fly. If you don’t feel like installing all the dependencies, you could build a <a href='https://github.com/ljpengelen/markdown-to-pdf/blob/master/Dockerfile'>Docker image</a> and run the tool in a container instead.</p>]]>
+    </content>
+  </entry>
+</feed>

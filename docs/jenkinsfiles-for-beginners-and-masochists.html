@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Jenkinsfiles for Beginners and Masochists</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link type="application/atom+xml" rel="alternate" href="atom.xml" title="Jenkinsfiles for Beginners and Masochists">
+    
+      <link rel="canonical" href="https://www.kabisa.nl/tech/jenkinsfiles-for-beginners-and-masochists">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/themes/prism.min.css">
+    <link rel="stylesheet" href="style.css">
+
+    
+
+    <meta name="title" content="Jenkinsfiles for Beginners and Masochists">
+    <meta name="twitter:title" content="Jenkinsfiles for Beginners and Masochists">
+    <meta property="og:title" content="Jenkinsfiles for Beginners and Masochists">
+    <meta property="og:type" content="website">
+    
+    
+      <meta name="twitter:url" content="https://blog.cofx.nl/jenkinsfiles-for-beginners-and-masochists.html">
+      <meta property="og:url" content="https://blog.cofx.nl/jenkinsfiles-for-beginners-and-masochists.html">
+    
+    
+      <meta name="twitter:card" content="summary">
+    
+    
+    
+  </head>
+  <body>
+    <div class="header">
+      <h1 class="site-title">
+        <a class="page-link" href="index.html">BBC: blog by cofx</a>
+      </h1>
+      <div class="site-nav">
+        <a class="page-link" href="archive.html">Archive</a>
+        <a class="page-link" href="tags/index.html">Tags</a>
+        <a class="page-link" href="atom.xml">Feed</a>
+      </div>
+    </div>
+    <div class="wrapper">
+      <h1>
+  
+  Jenkinsfiles for Beginners and Masochists
+  
+</h1>
+<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>Because <a href='https://jenkins.io/'>Jenkins</a> is one of the biggest names in the field of tools for continuous integration and continuous delivery, it probably needs no introduction. Because you probably read <a href='https://www.theguild.nl/building-github-pull-requests-using-jenkins-pipelines/'>every letter on theguild.nl</a>, <a href='https://jenkins.io/doc/book/pipeline/'>Pipelines</a> and <a href='https://jenkins.io/doc/book/pipeline/jenkinsfile/'>Jenkinsfiles</a> also need no introduction. In case you forgot, Jenkinsfiles provide a way to declaratively specify continuous-delivery pipelines, which are automated expressions of your process for getting software from version control right through to your users and customers, as <a href='https://jenkins.io/doc/book/pipeline/'>Jenkins puts it</a>. You can keep Jenkinsfiles in the repositories of the apps they test and deploy. When Jenkins finds such a file in a repository, it will set up the pipeline defined in the file and run it. This allows developers to manage the pipelines for their apps without dealing with Jenkins itself.</p><p>If you have limited experience with Jenkins, I’d advise you to run it locally right away and take a look. If you’re running <a href='https://www.docker.com/'>Docker</a>, the simplest way to run Jenkins is by means of a script like the following.</p><pre><code class="lang-sh">#!/bin/sh
+docker pull jenkinsci/blueocean
+docker run -u root --rm -d \
+  -p 8080:8080 \
+  -p 50000:50000 \
+  -v jenkins-data:/var/jenkins&#95;home \
+  -v jenkins-root:/root \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /Users/lucengelen/Repositories:/Users/lucengelen/Repositories \
+  jenkinsci/blueocean
+</code></pre><p>When you compare this script with the <a href='https://jenkins.io/doc/book/installing/#docker'>installation instructions provided by Jenkins</a>, you’ll see some differences. First, I’ve added <code>docker pull jenkinsci/blueocean</code> to ensure that I always use the latest version of the Docker image for Jenkins. Additionally, I’ve added the command-line arguments <code>-v jenkins-root:/root</code> and <code>-v /Users/lucengelen/Repositories:/Users/lucengelen/Repositories</code>. The first ensures that SSH keys are preserved when a new Docker image for Jenkins is built. The second ensures that the folder where I keep my repositories is accessible from within the Docker container. You should modify this line to match your situation (or move your repositories to <code>/Users/lucengelen/Repositories</code>).</p><p>After you’ve executed the commands above, you’ll be able to visit <a href='http://localhost:8080/'>http://localhost:8080</a> in the browser and see Jenkins’ post-installation setup wizard. Jenkins asks you to enter a key that you can find in its logs, which you can inspect by running <code>docker logs &lt;CONTAINER&#95;ID&gt;</code>, where <code>&lt;CONTAINER&#95;ID&gt;</code> is the long string displayed after the docker run command is finished.</p><p>Once you’re done with the setup, create a new job in Jenkins with the type “Multibranch Pipeline”. Give this job a source of type “Git” and point it to the repository <a href='https://github.com/ljpengelen/jenkinsfile'>https://github.com/ljpengelen/jenkinsfile</a>. You’ll see that Jenkins discovers the Jenkinsfile in the root of the repository and tries to run a pipeline for the branches <code>master</code> and <code>staging</code>. This will fail for a number of reasons, but that’s okay.</p><h2>Starting From Scratch</h2><p>When experimenting with Jenkins, it’s often convenient to be able to test changes to a Jenkinsfile without pushing to a remote repository. If Jenkins is pulling a remote repository for changes, it will only see the that you’ve pushed. Using a file URL for a local repository enables you to iterate faster. Assuming that you’ve clone the repository mentioned above into the folder <code>/Users/lucengelen/Repositories/jenkinsfile</code>, you can create a second multibranch-pipeline job and point it to the repository <code>file:///Users/lucengelen/Repositories/jenkinsfile</code>, for example.</p><p>After you’ve done this for the folder were you’ve cloned the repository, replace the content of the Jenkinsfile in the root of the repository to the following and commit your changes.</p><pre><code class="lang-groovy">pipeline {
+  agent none
+
+  stages {
+    stage&#40;&quot;Test back end&quot;&#41; {
+      agent {
+        dockerfile {
+          filename &quot;back-end/dockerfiles/ci/Dockerfile&quot;
+        }
+      }
+
+      steps {
+        sh &quot;cd back-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Test front end&quot;&#41; {
+      agent {
+        dockerfile {
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+        }
+      }
+
+      steps {
+        sh &quot;rm -f front-end/node&#95;modules &amp;&amp; ln -s /app/node&#95;modules front-end/node&#95;modules&quot;
+        sh &quot;cd front-end &amp;&amp; bin/ci&quot;
+      }
+    }
+  }
+}
+</code></pre><p>If you’ve committed these changes on a new branch, you need to ask Jenkins to scan your multibranch pipeline again. If you’ve committed them to an existing branch, you can just start a new build for that branch. You’ll see that this build succeeds.</p><p>The tests and linters for both apps are executed inside Docker containers. The dependencies for both apps are installed inside these containers. This way, Docker takes care of the caching.</p><p>By default, Yarn looks for dependencies in a folder named <code>node&#95;modules</code> in the root of your project folder. The command <code>cd front-end &amp;&amp; bin/ci</code> is executed in the folder where Jenkins has checked out your repository. As part of the build of the Docker image for the front end, however, the dependencies are installed in the folder <code>/app/node&#95;modules</code>. This explains the presence of the command <code>rm -f front-end/node&#95;modules &amp;&amp; ln -s /app/node&#95;modules front-end/node&#95;modules</code>. There’s a Yarn-specific way of configuring an alternative location of the node_modules folder, but it didn’t work for me. Since this is also a post for masochists, feel free to experiment with it.</p><h2>Shooting Yourself in the Foot</h2><p>You can tell Jenkins to run (parts of) your pipelines on a specific node. You do this by specifying a label for an agent in your pipeline. The steps for this particular agent will then be executed on a node with the given label. Modify your Jenkinsfile as follows.</p><pre><code class="lang-groovy">pipeline {
+  agent none
+
+  stages {
+    stage&#40;&quot;Test back end&quot;&#41; {
+      agent {
+        dockerfile {
+          filename &quot;back-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;cd back-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Test front end&quot;&#41; {
+      agent {
+        dockerfile {
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;rm -f front-end/node&#95;modules &amp;&amp; ln -s /app/node&#95;modules front-end/node&#95;modules&quot;
+        sh &quot;cd front-end &amp;&amp; bin/ci&quot;
+      }
+    }
+  }
+}
+</code></pre><p>If you trigger a new build, you’ll probably see it fail because there’s no agent with the label “webapps”. Introduce a new agent by visiting <a href='http://localhost:8080/computer/new'>http://localhost:8080/computer/new</a>, choosing a name, and selecting “permanent agent”. On the next page, specify a remote root directory, set the label to “webapps”, and the host to “localhost” or your computer’s hostname. If you’re on a Mac, you’ll have to <a href='https://www.booleanworld.com/access-mac-ssh-remote-login/'>allow remote access via SSH to your machine</a>. Provide your credentials for logging in via SSH.</p><p>If you’ve followed all these steps, you should now be able to run the pipeline, right? In the end, you’re just executing the steps on your local machine, just like you were doing before. If you’re working on a Mac, you’ll quickly find that new builds still fail. For some reason, Docker is not available, and you’ll see a line ending with <code>script.sh: line 1: docker: command not found</code> in the console output of your pipeline.</p><p>If you go to the command line and execute the following command, you’ll understand what’s going on.</p><pre><code class="lang-shell-session">ssh localhost &quot;echo \$PATH&quot;
+</code></pre><p>This will result in something like <code>/usr/bin:/bin:/usr/sbin:/sbin</code>. Be sure to escape the dollar sign because the result of the following command will only add to the confusion.</p><pre><code class="lang-shell-session">ssh localhost &quot;echo $PATH&quot;
+</code></pre><p>If you run commands like we do above, you end up in a non-interactive, non-login shell. This is also what Jenkins is doing when it’s executing the steps of the agents in our Jenkinsfile. In such a shell, you have a different path than in the interactive login shell that you work in when you open a terminal. On a Mac, the Docker executable is located at <code>/usr/local/bin/docker</code>, which is not in the path of the non-interactive, non-login shell.</p><p>To fix this, go back to the configuration of the node you just added and add <code>PATH=$PATH:/usr/local/bin &amp;&amp;</code> as the value for the input “Prefix Start Agent Command” that is part of the advanced settings.</p><p>Because we’re just experimenting with Jenkins, there’s no real reason to shoot yourself in the foot like this. You could leave out the label or configure your main node to run jobs with this label. I just wanted to warn you about this pitfall in case you ever encountered it in the real world.</p><h2>Continuous Delivery</h2><p>To keep experimenting along, you’ll need an instance of Dokku running somewhere. Coincidentally, there’s a blog post about setting up an instance of <a href='https://www.theguild.nl/setting-up-dokku-on-azure-with-terraform-and-ansible-a-guided-tour/'>Dokku on Azure</a> that is almost perfect for the Jenkinsfile below. You only have to open port 8000 instead of 8080. You may also have to pick another prefix for your hostnames if the ones below are taken.</p><pre><code class="lang-groovy">dokkuHostname = &quot;kabisa-dokku-demo-staging.westeurope.cloudapp.azure.com&quot;
+if &#40;env.BRANCH&#95;NAME == &quot;production&quot;&#41; {
+  dokkuHostname = &quot;kabisa-dokku-demo-production.westeurope.cloudapp.azure.com&quot;
+}
+
+pipeline {
+  agent none
+
+  stages {
+    stage&#40;&quot;Test back end&quot;&#41; {
+      agent {
+        dockerfile {
+          filename &quot;back-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;cd back-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Test front end&quot;&#41; {
+      agent {
+        dockerfile {
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;rm -f front-end/node&#95;modules &amp;&amp; ln -s /app/node&#95;modules front-end/node&#95;modules&quot;
+        sh &quot;cd front-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Deploy back end&quot;&#41; {
+      agent {
+        label &quot;webapps&quot;
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;git push -f dokku@${dokkuHostname}:back-end HEAD:refs/heads/master&quot;
+      }
+    }
+
+    stage&#40;&quot;Build front end&quot;&#41; {
+      agent {
+        dockerfile {
+          args &quot;-e 'API&#95;BASE&#95;URL=http://${dokkuHostname}:8000/api'&quot;
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;cd front-end &amp;&amp; yarn build&quot;
+      }
+    }
+
+    stage&#40;&quot;Deploy front end&quot;&#41; {
+      agent {
+        label &quot;webapps&quot;
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;rm -rf deploy-front-end&quot;
+        sh &quot;git clone dokku@${dokkuHostname}:front-end deploy-front-end&quot;
+        sh &quot;rm -rf deploy-front-end/dist&quot;
+        sh &quot;mkdir -p deploy-front-end/dist&quot;
+        sh &quot;cp -R front-end/dist/&#42; deploy-front-end/dist&quot;
+        sh &quot;touch deploy-front-end/.static&quot;
+        sh &quot;cd deploy-front-end &amp;&amp; git add . &amp;&amp; git commit -m \&quot;Deploy\&quot; --allow-empty &amp;&amp; git push -f&quot;
+      }
+    }
+  }
+}
+</code></pre><p>If you want the pipeline above to be successful, you need to configure SSH in the Docker container running Jenkins so that it uses the right keys. Execute <code>docker exec -it &lt;CONTAINER&#95;ID&gt; /bin/sh</code> to enter the container, store the keys somewhere, create the file <code>/root/.ssh/config</code> if it doesn’t exist yet, and add the following lines to point SSH to the right keys.</p><pre><code class="lang-sh">Host kabisa-dokku-demo-staging.westeurope.cloudapp.azure.com
+  IdentityFile &#126;/.ssh/azure&#95;dokku&#95;git&#95;staging
+
+Host kabisa-dokku-demo-production.westeurope.cloudapp.azure.com
+  IdentityFile &#126;/.ssh/azure&#95;dokku&#95;git&#95;production
+</code></pre><p>Modify the hostnames and key names in this example to match your situation.</p><h2>Better Safe than Sorry</h2><p>Unless you tell Docker otherwise, it will do as little work as possible when building an image. It caches the result of each build step of a Dockerfile that it has executed before and uses the result for each new build. If a new version of the base image you’re using becomes available that conflicts with your app, however, you won’t notice that when running the tests in a container using an image that is built upon the older, cached version of the base image.</p><p>You can instruct Docker to look for newer verions of your base image during a build with the command-line argument <code>--pull</code>. Because new base images are only available once in a while, it’s not really wasteful to use this argument all the time when building images. This is what we’re doing in the Jenkinsfile below.</p><pre><code class="lang-groovy">additionalBuildArgs = &quot;--pull&quot;
+if &#40;env.BRANCH&#95;NAME == &quot;master&quot;&#41; {
+  additionalBuildArgs = &quot;--pull --no-cache&quot;
+}
+
+dokkuHostname = &quot;kabisa-dokku-demo-staging.westeurope.cloudapp.azure.com&quot;
+if &#40;env.BRANCH&#95;NAME == &quot;production&quot;&#41; {
+  dokkuHostname = &quot;kabisa-dokku-demo-production.westeurope.cloudapp.azure.com&quot;
+}
+
+pipeline {
+  agent none
+
+  triggers {
+    cron&#40;env.BRANCH&#95;NAME == 'master' ? '@weekly' : ''&#41;
+  }
+
+  stages {
+    stage&#40;&quot;Test back end&quot;&#41; {
+      agent {
+        dockerfile {
+          additionalBuildArgs &quot;${additionalBuildArgs}&quot;
+          filename &quot;back-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;cd back-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Test front end&quot;&#41; {
+      agent {
+        dockerfile {
+          additionalBuildArgs &quot;${additionalBuildArgs}&quot;
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;rm -f front-end/node&#95;modules &amp;&amp; ln -s /app/node&#95;modules front-end/node&#95;modules&quot;
+        sh &quot;cd front-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Deploy back end&quot;&#41; {
+      agent {
+        label &quot;webapps&quot;
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+    }
+
+    stage&#40;&quot;Build front end&quot;&#41; {
+      agent {
+        dockerfile {
+          args &quot;-e 'API&#95;BASE&#95;URL=http://${dokkuHostname}:8000/api'&quot;
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      when {
+        beforeAgent true
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;cd front-end &amp;&amp; yarn build&quot;
+      }
+    }
+
+    stage&#40;&quot;Deploy front end&quot;&#41; {
+      agent {
+        label &quot;webapps&quot;
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;rm -rf deploy-front-end&quot;
+        sh &quot;git clone dokku@${dokkuHostname}:front-end deploy-front-end&quot;
+        sh &quot;rm -rf deploy-front-end/dist&quot;
+        sh &quot;mkdir -p deploy-front-end/dist&quot;
+        sh &quot;cp -R front-end/dist/&#42; deploy-front-end/dist&quot;
+        sh &quot;touch deploy-front-end/.static&quot;
+        sh &quot;cd deploy-front-end &amp;&amp; git add . &amp;&amp; git commit -m \&quot;Deploy\&quot; --allow-empty &amp;&amp; git push -f&quot;
+      }
+    }
+  }
+}
+</code></pre><p>You may have noticed that there’s also a command-line argument <code>--no-cache</code> in this Jenkinsfile, which is only used on the master branch. This command-line argument instructs Docker to not use any caching at all when building an image. This means that Docker will download and install all dependencies when building an image. If there’s something wrong when any of your dependencies, you’ll find out right away. This is a good way of ensuring that your Docker containers can be built from scratch, but it would be a waste of resources and bandwith to build images like this for every commit. In the Jenkinsfile above, images are only built from scratch on the <code>master</code> branch. This ensures that you’ll find out that something is wrong with your Docker image when you merge features to <code>master</code>. To ensure that you’re also notified in case of issues when an app is no longer in active development, a trigger is added to build the <code>master</code> branch once every week.</p><p>The line <code>beforeAgent true</code> in the when clause of the stage “Build front end” ensures that the Docker image used to build the front end is only built when new changes are pushed to the branches <code>staging</code> and <code>production</code>. Without this line, the image would always be built, regardless of the branch. The when clause would only prevent the steps from being executed. This is mostly gold plating of the Jenkinsfile, since the same image is used to run the tests for the front end and build it, which means that the second Docker build would use cached data anyway.</p><p>Because the same container is used for testing and building the front end, the additional arguments for the Docker build command are left out for the build step.</p><h2>Shooting Yourself in the Foot Again</h2><p>So far, some potential issues were masked because we’ve been running Jenkins as root. In other real-life scenarios, Jenkins will not always be running as root, however. If you run the <a href='https://jenkins.io/doc/book/installing/#war-file'>WAR-file version of Jenkins</a>, for example, the Jenkins process would be running as the user that executed <code>java -jar jenkins.war</code> on the command line. When you execute a new build in that scenario, you’ll find that it fails again. The user that’s executing commands in the Docker container for the front end doesn’t have the right access rights. I advise all masochists to try this at home and watch it fail.</p><p>We can easily fix this by explicitly instructing Docker to use the root user again, as shown below.</p><pre><code class="lang-groovy">additionalBuildArgs = &quot;--pull&quot;
+if &#40;env.BRANCH&#95;NAME == &quot;master&quot;&#41; {
+  additionalBuildArgs = &quot;--pull --no-cache&quot;
+}
+
+dokkuHostname = &quot;kabisa-dokku-demo-staging.westeurope.cloudapp.azure.com&quot;
+if &#40;env.BRANCH&#95;NAME == &quot;production&quot;&#41; {
+  dokkuHostname = &quot;kabisa-dokku-demo-production.westeurope.cloudapp.azure.com&quot;
+}
+
+pipeline {
+  agent none
+
+  triggers {
+    cron&#40;env.BRANCH&#95;NAME == 'master' ? '@weekly' : ''&#41;
+  }
+
+  stages {
+    stage&#40;&quot;Test back end&quot;&#41; {
+      agent {
+        dockerfile {
+          additionalBuildArgs &quot;${additionalBuildArgs}&quot;
+          filename &quot;back-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;cd back-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Test front end&quot;&#41; {
+      agent {
+        dockerfile {
+          additionalBuildArgs &quot;${additionalBuildArgs}&quot;
+          args &quot;-u root&quot;
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;rm -f front-end/node&#95;modules &amp;&amp; ln -s /app/node&#95;modules front-end/node&#95;modules&quot;
+        sh &quot;cd front-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Deploy back end&quot;&#41; {
+      agent {
+        label &quot;webapps&quot;
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;git push -f dokku@${dokkuHostname}:back-end HEAD:refs/heads/master&quot;
+      }
+    }
+
+    stage&#40;&quot;Build front end&quot;&#41; {
+      agent {
+        dockerfile {
+          args &quot;-u root -e 'API&#95;BASE&#95;URL=http://${dokkuHostname}:8000/api'&quot;
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      when {
+        beforeAgent true
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;cd front-end &amp;&amp; yarn build&quot;
+      }
+    }
+
+    stage&#40;&quot;Deploy front end&quot;&#41; {
+      agent {
+        label &quot;webapps&quot;
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;rm -rf deploy-front-end&quot;
+        sh &quot;git clone dokku@${dokkuHostname}:front-end deploy-front-end&quot;
+        sh &quot;rm -rf deploy-front-end/dist&quot;
+        sh &quot;mkdir -p deploy-front-end/dist&quot;
+        sh &quot;cp -R front-end/dist/&#42; deploy-front-end/dist&quot;
+        sh &quot;touch deploy-front-end/.static&quot;
+        sh &quot;cd deploy-front-end &amp;&amp; git add . &amp;&amp; git commit -m \&quot;Deploy\&quot; --allow-empty &amp;&amp; git push -f&quot;
+      }
+    }
+  }
+</code></pre><p>The test and build steps for the front end are now executed as root, which seems to work great at first sight. In fact, due to some peculiarities related to file permission of Docker for Mac, it works great on Mac, period.</p><p>If you feel that seeing is believing or have lots of time to kill, boot up a Linux (virtual) machine, install Docker and Jenkins, set up a multibranch project again, and start a new build. Afterwards, visit Jenkins’ workspace for the project and check the file permissions. You’ll notice that some files and folders have been created that are owned by root. Because Jenkins isn’t running as root, it is not allowed to delete these files when the time comes to clean up the workspace for your project. For your own amusement, it’s also worthwhile to check that you don’t have this issue on Macs.</p><p>To prevent Jenkins from running out of disk space in the future, we need to make sure that the files and folders created as root can be deleted by Jenkins. There are a number of ways to do this, but one way that doesn’t require any additional configuration of Jenkins is demonstrated in the final version of our Jenkinsfile.</p><pre><code class="lang-groovy">additionalBuildArgs = &quot;--pull&quot;
+if &#40;env.BRANCH&#95;NAME == &quot;master&quot;&#41; {
+  additionalBuildArgs = &quot;--pull --no-cache&quot;
+}
+
+dokkuHostname = &quot;kabisa-dokku-demo-staging.westeurope.cloudapp.azure.com&quot;
+if &#40;env.BRANCH&#95;NAME == &quot;production&quot;&#41; {
+  dokkuHostname = &quot;kabisa-dokku-demo-production.westeurope.cloudapp.azure.com&quot;
+}
+
+pipeline {
+  agent none
+
+  triggers {
+    cron&#40;env.BRANCH&#95;NAME == 'master' ? '@weekly' : ''&#41;
+  }
+
+  stages {
+    stage&#40;&quot;Test back end&quot;&#41; {
+      agent {
+        dockerfile {
+          additionalBuildArgs &quot;${additionalBuildArgs}&quot;
+          filename &quot;back-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;cd back-end &amp;&amp; bin/ci&quot;
+      }
+    }
+
+    stage&#40;&quot;Test front end&quot;&#41; {
+      agent {
+        dockerfile {
+          additionalBuildArgs &quot;${additionalBuildArgs}&quot;
+          args &quot;-u root&quot;
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      steps {
+        sh &quot;rm -f front-end/node&#95;modules &amp;&amp; ln -s /app/node&#95;modules front-end/node&#95;modules&quot;
+        sh &quot;cd front-end &amp;&amp; bin/ci&quot;
+      }
+
+      post {
+        always {
+          sh &quot;chown -R \$&#40;stat -c '%u:%g' .&#41; \$WORKSPACE&quot;
+        }
+      }
+    }
+
+    stage&#40;&quot;Deploy back end&quot;&#41; {
+      agent {
+        label &quot;webapps&quot;
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;git push -f dokku@${dokkuHostname}:back-end HEAD:refs/heads/master&quot;
+      }
+    }
+
+    stage&#40;&quot;Build front end&quot;&#41; {
+      agent {
+        dockerfile {
+          args &quot;-u root -e 'API&#95;BASE&#95;URL=http://${dokkuHostname}:8000/api'&quot;
+          filename &quot;front-end/dockerfiles/ci/Dockerfile&quot;
+          label &quot;webapps&quot;
+        }
+      }
+
+      when {
+        beforeAgent true
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;cd front-end &amp;&amp; yarn build&quot;
+      }
+
+      post {
+        always {
+          sh &quot;chown -R \$&#40;stat -c '%u:%g' .&#41; \$WORKSPACE&quot;
+        }
+      }
+    }
+
+    stage&#40;&quot;Deploy front end&quot;&#41; {
+      agent {
+        label &quot;webapps&quot;
+      }
+
+      when {
+        anyOf {
+          branch 'staging';
+          branch 'production'
+        }
+      }
+
+      steps {
+        sh &quot;rm -rf deploy-front-end&quot;
+        sh &quot;git clone dokku@${dokkuHostname}:front-end deploy-front-end&quot;
+        sh &quot;rm -rf deploy-front-end/dist&quot;
+        sh &quot;mkdir -p deploy-front-end/dist&quot;
+        sh &quot;cp -R front-end/dist/&#42; deploy-front-end/dist&quot;
+        sh &quot;touch deploy-front-end/.static&quot;
+        sh &quot;cd deploy-front-end &amp;&amp; git add . &amp;&amp; git commit -m \&quot;Deploy\&quot; --allow-empty &amp;&amp; git push -f&quot;
+      }
+    }
+  }
+</code></pre><p>After the test and build step, we change the owner of all files in the workspace to whoever owns the workspace, which is Jenkins.</p><h2>Conclusion</h2><p>If you ask me, there are two important conclusions to be drawn from this port. First, Jenkinsfiles are a powerful and convenient tool for continuous integration and continuous delivery. Second, one instance of Jenkins can be very different from another. You can’t take a Jenkinsfile from one project to another and expect it to work right away. I hope that some of the pitfalls described in this post point you in the right direction when you run into trouble in the future.</p>
+
+<p>
+  <i>Published: 2019-01-16</i>
+  
+</p>
+
+<p>
+  <i>
+  Tagged:
+  
+  <span class="tag">
+    <a href="tags/Jenkins.html">Jenkins</a>
+  </span>
+  
+  <span class="tag">
+    <a href="tags/Jenkinsfiles.html">Jenkinsfiles</a>
+  </span>
+  
+  </i>
+</p>
+
+
+    </div>
+  </body>
+</html>

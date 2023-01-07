@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Immutable objects in Python</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link type="application/atom+xml" rel="alternate" href="atom.xml" title="Immutable objects in Python">
+    
+      <link rel="canonical" href="https://www.kabisa.nl/tech/immutable-objects-in-python">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/themes/prism.min.css">
+    <link rel="stylesheet" href="style.css">
+
+    
+
+    <meta name="title" content="Immutable objects in Python">
+    <meta name="twitter:title" content="Immutable objects in Python">
+    <meta property="og:title" content="Immutable objects in Python">
+    <meta property="og:type" content="website">
+    
+    
+      <meta name="twitter:url" content="https://blog.cofx.nl/immutable-objects-in-python.html">
+      <meta property="og:url" content="https://blog.cofx.nl/immutable-objects-in-python.html">
+    
+    
+      <meta name="twitter:card" content="summary">
+    
+    
+    
+  </head>
+  <body>
+    <div class="header">
+      <h1 class="site-title">
+        <a class="page-link" href="index.html">BBC: blog by cofx</a>
+      </h1>
+      <div class="site-nav">
+        <a class="page-link" href="archive.html">Archive</a>
+        <a class="page-link" href="tags/index.html">Tags</a>
+        <a class="page-link" href="atom.xml">Feed</a>
+      </div>
+    </div>
+    <div class="wrapper">
+      <h1>
+  
+  Immutable objects in Python
+  
+</h1>
+<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>To keep programs easy to reason about, I try to avoid side effects and aim for a functional style of programming using immutable objects. I’m happy to trade a few CPU cycles for a reduced demand of brain power.</p><p>Because we’re talking about Python here, and <a href='https://docs.python-guide.org/writing/style/#we-are-all-responsible-users'>we’re all responsible users</a>, it’s impossible to create actual <em>objects</em> that are <em>impossible</em> to mutate. You can, however, create things that behave like objects that are impossible to mutate or actual objects that cannot be mutated by mistake.</p><p>Let’s look at three ways to do this and how they differ.</p><h2>Named Tuples</h2><p>The Python project I’m currently working on started before <a href='https://docs.python.org/3/library/dataclasses.html'>data classes</a> were available. Additionally, this project is created for a client that prefers the use of as few dependencies as possible. In that context, the following class for points emerged:</p><pre><code class="lang-python">from collections import namedtuple
+
+
+class Point&#40;namedtuple&#40;&quot;&#95;Point&quot;, &#91;&quot;x&quot;, &quot;y&quot;&#93;&#41;&#41;:
+    def scale&#40;self, scale&#41;:
+        return Point&#40;self.x &#42; scale, self.y &#42; scale&#41;
+
+    def translate&#40;self, dx, dy&#41;:
+        return Point&#40;self.x + dx, self.y + dy&#41;
+</code></pre><p>It’s a class for points in two-dimensional space. When you call the <code>scale</code> or <code>translate</code> method, a new point is returned. This variant of the class extends a named tuple <code>&#95;Point</code> consisting of two fields named <code>x</code> and <code>y</code>.</p><p>When you try to mutate an instance of this class, you’ll be greeted with an <code>AttributeError</code>:</p><pre><code class="lang-python">&gt;&gt;&gt; from collections import namedtuple
+&gt;&gt;&gt; Point = namedtuple&#40;&quot;&#95;Point&quot;, &#91;&quot;x&quot;, &quot;y&quot;&#93;&#41;
+&gt;&gt;&gt; p = Point&#40;1, 2&#41;
+&gt;&gt;&gt; p.x
+1
+&gt;&gt;&gt; p.x = 2
+Traceback &#40;most recent call last&#41;:
+  File &quot;&lt;stdin&gt;&quot;, line 1, in &lt;module&gt;
+AttributeError: can't set attribute
+</code></pre><p>That looks pretty much like immutability to me. One of the downsides of this approach is that <code>p</code> isn’t an actual object. It’s a tuple.</p><pre><code class="lang-python">&gt;&gt;&gt; SomethingCompletelyDifferent = namedtuple&#40;&quot;SomethingCompletelyDifferent&quot;, &quot;a b&quot;&#41;
+&gt;&gt;&gt; a = SomethingCompletelyDifferent&#40;1, 2&#41;
+&gt;&gt;&gt; p == a
+True
+&gt;&gt;&gt; p == &#40;1, 2&#41;
+True
+</code></pre><p>Depending on how you’re using instances of this class, this could be a big deal. The documentation for the <a href='https://www.attrs.org/en/stable/index.html'>attrs</a> package list <a href='https://www.attrs.org/en/stable/why.html#namedtuples'>a few more downsides</a>.</p><h2>Attrs</h2><p>If you don’t mind dependencies, you could use the aforementioned <a href='https://www.attrs.org/en/stable/index.html'>attrs</a> package and do this:</p><pre><code class="lang-python">import attr
+
+
+@attr.s&#40;frozen=True&#41;
+class Point:
+    x = attr.ib&#40;&#41;
+    y = attr.ib&#40;&#41;
+
+    def scale&#40;self, scale&#41;:
+        return Point&#40;self.x &#42; scale, self.y &#42; scale&#41;
+
+    def translate&#40;self, dx, dy&#41;:
+        return Point&#40;self.x + dx, self.y + dy&#41;
+</code></pre><p>In this case, the decorator <code>@attr.s&#40;frozen=True&#41;</code> dictates that values of <code>x</code> and <code>y</code> cannot be changed by simple assignments. This behaves like you expect it to:</p><pre><code class="lang-python">&gt;&gt;&gt; import attr
+&gt;&gt;&gt; @attr.s&#40;frozen=True&#41;
+... class Point:
+...     x = attr.ib&#40;&#41;
+...     y = attr.ib&#40;&#41;
+...
+&gt;&gt;&gt; p = Point&#40;1, 2&#41;
+&gt;&gt;&gt; p.x
+1
+&gt;&gt;&gt; p.x = 2
+Traceback &#40;most recent call last&#41;:
+  File &quot;&lt;stdin&gt;&quot;, line 1, in &lt;module&gt;
+  File &quot;/Users/lucengelen/.local/share/virtualenvs/python-immutable-1HIt&#95;5XS/lib/python3.7/site-packages/attr/&#95;make.py&quot;, line 428, in &#95;frozen&#95;setattrs
+    raise FrozenInstanceError&#40;&#41;
+attr.exceptions.FrozenInstanceError
+&gt;&gt;&gt; p == &#40;1, 2&#41;
+False
+&gt;&gt;&gt; p == Point&#40;1, 2&#41;
+True
+&gt;&gt;&gt; p == Point&#40;2, 1&#41;
+False
+</code></pre><p>You can still mutate instances of this class, but not by accident:</p><pre><code class="lang-python">&gt;&gt;&gt; p = Point&#40;1, 2&#41;
+&gt;&gt;&gt; p.&#95;&#95;dict&#95;&#95;&#91;&quot;x&quot;&#93; = 100
+&gt;&gt;&gt; p
+Point&#40;x=100, y=2&#41;
+</code></pre><h2>Data Classes</h2><p>Since Python 3.7, you can use <a href='https://docs.python.org/3/library/dataclasses.html'>data classes</a> to achieve something similar to the variant using <a href='https://www.attrs.org/en/stable/index.html'>attrs</a>:</p><pre><code class="lang-python">from dataclasses import dataclass
+
+
+@dataclass&#40;frozen=True&#41;
+class Point:
+    x: int
+    y: int
+
+    def scale&#40;self, scale&#41;:
+        return Point&#40;self.x &#42; scale, self.y &#42; scale&#41;
+
+    def translate&#40;self, dx, dy&#41;:
+        return Point&#40;self.x + dx, self.y + dy&#41;
+</code></pre><p>Here, the decorator <code>@dataclass&#40;frozen=True&#41;</code> dictates that the values of <code>x</code> and <code>y</code> cannot be changed by simple assignments. This also behaves like you would expect:</p><pre><code class="lang-python">&gt;&gt;&gt; from dataclasses import dataclass
+&gt;&gt;&gt; @dataclass&#40;frozen=True&#41;
+... class Point:
+...     x: int
+...     y: int
+...
+&gt;&gt;&gt; p = Point&#40;1, 2&#41;
+&gt;&gt;&gt; p.x = 100
+Traceback &#40;most recent call last&#41;:
+  File &quot;&lt;stdin&gt;&quot;, line 1, in &lt;module&gt;
+  File &quot;&lt;string&gt;&quot;, line 3, in &#95;&#95;setattr&#95;&#95;
+dataclasses.FrozenInstanceError: cannot assign to field 'x'
+&gt;&gt;&gt; p = Point&#40;1, 2&#41;
+&gt;&gt;&gt; p == Point&#40;1, 2&#41;
+True
+&gt;&gt;&gt; p == Point&#40;2, 1&#41;
+False
+&gt;&gt;&gt; p == &#40;1, 2&#41;
+False
+</code></pre><p>You can mutate instances in the same way as above, but I won’t believe you if say you did this by mistake.</p><h2>Conclusion</h2><p>If you want to play around with these variants, you could use the Python shell. You could also take a look at the following repo: <a href='https://github.com/ljpengelen/immutable-python-objects'>https://github.com/ljpengelen/immutable-python-objects</a>.</p><p>My personal conclusion after reviewing these variants is that I won’t replace all the named tuples in existing projects just yet. I don’t expect to get burned by the unfortunate behavior concerning equality. For future projects, however, I’ll probably go with data classes.</p>
+
+<p>
+  <i>Published: 2019-08-01</i>
+  
+</p>
+
+<p>
+  <i>
+  Tagged:
+  
+  <span class="tag">
+    <a href="tags/Python.html">Python</a>
+  </span>
+  
+  </i>
+</p>
+
+
+    </div>
+  </body>
+</html>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Sending Data to the Other Side of the World: JSON vs Protocol Buffers and REST vs gRPC</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link type="application/atom+xml" rel="alternate" href="atom.xml" title="Sending Data to the Other Side of the World: JSON vs Protocol Buffers and REST vs gRPC">
+    
+      <link rel="canonical" href="https://www.kabisa.nl/tech/sending-data-to-the-other-side-of-the-world-json-protocol-buffers-rest-grpc">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/themes/prism.min.css">
+    <link rel="stylesheet" href="style.css">
+
+    
+
+    <meta name="title" content="Sending Data to the Other Side of the World: JSON vs Protocol Buffers and REST vs gRPC">
+    <meta name="twitter:title" content="Sending Data to the Other Side of the World: JSON vs Protocol Buffers and REST vs gRPC">
+    <meta property="og:title" content="Sending Data to the Other Side of the World: JSON vs Protocol Buffers and REST vs gRPC">
+    <meta property="og:type" content="website">
+    
+    
+      <meta name="twitter:url" content="https://blog.cofx.nl/sending-data-to-the-other-side.html">
+      <meta property="og:url" content="https://blog.cofx.nl/sending-data-to-the-other-side.html">
+    
+    
+      <meta name="twitter:card" content="summary">
+    
+    
+    
+  </head>
+  <body>
+    <div class="header">
+      <h1 class="site-title">
+        <a class="page-link" href="index.html">BBC: blog by cofx</a>
+      </h1>
+      <div class="site-nav">
+        <a class="page-link" href="archive.html">Archive</a>
+        <a class="page-link" href="tags/index.html">Tags</a>
+        <a class="page-link" href="atom.xml">Feed</a>
+      </div>
+    </div>
+    <div class="wrapper">
+      <h1>
+  
+  Sending Data to the Other Side of the World: JSON vs Protocol Buffers and REST vs gRPC
+  
+</h1>
+<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>For a project I’m working on, I wanted to know which protocol and data representation would be best to transfer relatively large amounts of data between microservices. At first, I just wanted to see whether using <a href='https://developers.google.com/protocol-buffers/'>protocol buffers</a> to represent data would lead to smaller response sizes compared to compressed JSON. Once I was looking into protocol buffers, I wondered when it would be better to choose <a href='https://grpc.io/'>gRPC</a> over REST.</p><h2>Protocol Buffers</h2><p>As <a href='https://developers.google.com/protocol-buffers/'>Google puts it</a>, protocol buffers are a language-neutral, platform-neutral extensible mechanism for serializing structured data. Given the definition below, code to efficiently serialize and deserialize compact representations of lists of vectors can be generated for a number of programming languages.</p><pre><code class="lang-protobuf">syntax = &quot;proto3&quot;;
+
+package vectors;
+
+message Point {
+    double x = 1;
+    double y = 2;
+    double z = 3;
+}
+
+message Vector {
+    Point start = 1;
+    Point end = 2;
+}
+
+message Vectors {
+    repeated Vector vectors = 1;
+}
+</code></pre><p>As you can see in the definition above, the data is typed. That is an advantage over JSON if you ask me. Because of the large number of supported programming languages, you can exchange protocol buffers between apps written in many languages.</p><h2>gRPC</h2><p><a href='https://grpc.io/'>gRPC</a> is a high-performance, open-source universal framework for remote procedure calls. If you extend the definition above with declarations like the ones below, code can be generated that allows client applications to call methods of server applications in a way that compares to calling local methods.</p><pre><code class="lang-protobuf">service VectorService {
+    rpc GetVectorStream&#40;VectorsRequest&#41; returns &#40;stream Vector&#41; {}
+    rpc GetVectors&#40;VectorsRequest&#41; returns &#40;Vectors&#41; {}
+}
+
+message VectorsRequest {
+    int64 seed = 1;
+    int32 number&#95;of&#95;vectors = 2;
+}
+</code></pre><p>You implement the actual service by extending the base implementation generated from the definition. The following code shows an example implementation in Java.</p><pre><code class="lang-java">@GRpcService
+public class VectorsService extends VectorServiceGrpc.VectorServiceImplBase {
+
+    private final VectorGenerator vectorGenerator;
+
+    @Autowired
+    public VectorsService&#40;VectorGenerator vectorGenerator&#41; {
+        this.vectorGenerator = vectorGenerator;
+    }
+
+    @Override
+    public void getVectors&#40;VectorProto.VectorsRequest request, StreamObserver&lt;VectorProto.Vectors&gt; responseObserver&#41; {
+        responseObserver.onNext&#40;toProto&#40;vectorGenerator.generateRandomVectors&#40;request.getSeed&#40;&#41;, request.getNumberOfVectors&#40;&#41;&#41;&#41;&#41;;
+        responseObserver.onCompleted&#40;&#41;;
+    }
+
+    @Override
+    public void getVectorStream&#40;VectorProto.VectorsRequest request, StreamObserver&lt;VectorProto.Vector&gt; responseObserver&#41; {
+        vectorGenerator.generateRandomVectors&#40;request.getSeed&#40;&#41;, request.getNumberOfVectors&#40;&#41;&#41;.forEach&#40;vector -&gt; responseObserver.onNext&#40;toProto&#40;vector&#41;&#41;&#41;;
+        responseObserver.onCompleted&#40;&#41;;
+    }
+}
+</code></pre><p>The following implementation of a consumer gives an example of how such a remote procedure is called by a client.</p><pre><code class="lang-java">@Component
+public class VectorsServiceConsumer {
+
+    public void getVectors&#40;String hostname, int port, long seed, int numberOfVectors&#41; {
+        var managedChannel = ManagedChannelBuilder.forAddress&#40;hostname, port&#41;.usePlaintext&#40;&#41;.build&#40;&#41;;
+        var blockingStub = VectorServiceGrpc.newBlockingStub&#40;managedChannel&#41;;
+        var vectorsRequest = VectorProto.VectorsRequest.newBuilder&#40;&#41;
+                .setNumberOfVectors&#40;numberOfVectors&#41;
+                .setSeed&#40;seed&#41;
+                .build&#40;&#41;;
+
+        var response = blockingStub.getVectors&#40;vectorsRequest&#41;;
+
+        response.getVectorsList&#40;&#41;;
+
+        managedChannel.shutdown&#40;&#41;;
+    }
+
+    public void getVectorStream&#40;String hostname, int port, long seed, int numberOfVectors&#41; {
+        var managedChannel = ManagedChannelBuilder.forAddress&#40;hostname, port&#41;.usePlaintext&#40;&#41;.build&#40;&#41;;
+        var blockingStub = VectorServiceGrpc.newBlockingStub&#40;managedChannel&#41;;
+        var vectorsRequest = VectorProto.VectorsRequest.newBuilder&#40;&#41;
+                .setNumberOfVectors&#40;numberOfVectors&#41;
+                .setSeed&#40;seed&#41;
+                .build&#40;&#41;;
+
+        var response = blockingStub.getVectorStream&#40;vectorsRequest&#41;;
+
+        while &#40;response.hasNext&#40;&#41;&#41; {
+            response.next&#40;&#41;;
+        }
+
+        managedChannel.shutdown&#40;&#41;;
+    }
+}
+</code></pre><h2>Some Experiments</h2><p>To see some practical results and learn about the implementation details, I created a Spring Boot application that sends and receives data via REST and gRPC. If you want to do your own experiments, you could use that app as a starting point:</p><p><a href="https://github.com/ljpengelen/RPC">https://github.com/ljpengelen/RPC</a></p><p>The data exchanged by this app is a list of vectors with random start and end points. Represented as JSON, a vector looks as follows.</p><pre><code class="lang-json">{
+  &quot;start&quot;: {
+    &quot;x&quot;: 0.730967787376657,
+    &quot;y&quot;: 0.24053641567148587,
+    &quot;z&quot;: 0.6374174253501083
+  },
+  &quot;end&quot;: {
+    &quot;x&quot;: 0.5504370051176339,
+    &quot;y&quot;: 0.5975452777972018,
+    &quot;z&quot;: 0.3332183994766498
+  }
+}
+</code></pre><h2>Response Size</h2><p>The table below shows the response size in kilobytes when requesting a list of vectors of a given size via REST, using three different representations. As you can see from the table, if compression of responses is enabled on the server, it doesn’t matter much whether you choose for JSON or protocol buffers to represent your data. As far as response size is concerned, you might as well keep things simple and stick with JSON.</p><p>One reason to prefer protocol buffers over compressed JSON would be that protocol buffers are typed. Additionally, if you use a framework such as Spring Boot, you have to define <a href='https://en.wikipedia.org/wiki/Data_transfer_object'>data transfer objects</a> to represent the requests and responses of your REST endpoints. With protocol buffers, these are generated for you.</p><table><thead><tr><th style='text-align:right'>Number of vectors</th><th style='text-align:right'>JSON</th><th style='text-align:right'>Compressed JSON</th><th style='text-align:right'>Protocol Buffers</th></tr></thead><tbody><tr><td style='text-align:right'>1.000</td><td style='text-align:right'>156</td><td style='text-align:right'>59</td><td style='text-align:right'>59</td></tr><tr><td style='text-align:right'>10.000</td><td style='text-align:right'>1.520</td><td style='text-align:right'>576</td><td style='text-align:right'>586</td></tr><tr><td style='text-align:right'>100.000</td><td style='text-align:right'>15.220</td><td style='text-align:right'>5.600</td><td style='text-align:right'>5.720</td></tr></tbody></table><h2>Speed</h2><p>To compare the amount of time it takes to exchange lists of vectors via REST and gRPC, I’ve set up two virtual machines on AWS. Both machines had type <code>t2.small</code> (<a href="https://aws.amazon.com/ec2/instance-types/">https://aws.amazon.com/ec2/instance-types/</a>) and ran Linux and Java 11. One was located in Frankfurt and the other in Sydney. I was communicating with these machines from my local machine in Eindhoven, a 2017 MacBook Pro with a 2.8 GHz Intel Core i7 processor and 16 GB of RAM.</p><p>The table below shows the amount of time in milliseconds it takes to retrieve a list (or stream) of 10.000 vectors 10 times in a row. The two columns labelled “REST” show how much time it takes to exchange data represented as JSON and protocol buffers. With gRPC, data is always represented as protocol buffers. The two columns labelled “gRPC” show how much time it takes to transfer multiple vectors as a list and as a stream.</p><table><thead><tr><th style='text-align:left'>Client</th><th style='text-align:left'>Server</th><th style='text-align:right'>REST JSON</th><th style='text-align:right'>REST Protobuf</th><th style='text-align:right'>gRPC List</th><th style='text-align:right'>gRPC Stream</th></tr></thead><tbody><tr><td style='text-align:left'>Eindhoven</td><td style='text-align:left'>Eindhoven</td><td style='text-align:right'>326</td><td style='text-align:right'>77</td><td style='text-align:right'>118</td><td style='text-align:right'>1.764</td></tr><tr><td style='text-align:left'>Eindhoven</td><td style='text-align:left'>Frankfurt</td><td style='text-align:right'>883</td><td style='text-align:right'>665</td><td style='text-align:right'>1.689</td><td style='text-align:right'>2.430</td></tr><tr><td style='text-align:left'>Eindhoven</td><td style='text-align:left'>Sydney</td><td style='text-align:right'>16.161</td><td style='text-align:right'>11.658</td><td style='text-align:right'>55.457</td><td style='text-align:right'>57.537</td></tr><tr><td style='text-align:left'>Frankfurt</td><td style='text-align:left'>Sydney</td><td style='text-align:right'>6.531</td><td style='text-align:right'>4.930</td><td style='text-align:right'>22.730</td><td style='text-align:right'>22.864</td></tr><tr><td style='text-align:left'>Sydney</td><td style='text-align:left'>Frankfurt</td><td style='text-align:right'>7.276</td><td style='text-align:right'>4.589</td><td style='text-align:right'>22.745</td><td style='text-align:right'>26.161</td></tr><tr><td style='text-align:left'>Frankfurt</td><td style='text-align:left'>Frankfurt</td><td style='text-align:right'>980</td><td style='text-align:right'>170</td><td style='text-align:right'>287</td><td style='text-align:right'>1.120</td></tr><tr><td style='text-align:left'>Sydney</td><td style='text-align:left'>Sydney</td><td style='text-align:right'>1.021</td><td style='text-align:right'>257</td><td style='text-align:right'>368</td><td style='text-align:right'>1.189</td></tr></tbody></table><p>The last three rows are included as a sort of sanity check. I would expect the numbers for <code>Frankfurt -&gt; Frankfurt</code> to be comparable to those for <code>Sydney -&gt; Sydney</code> (because we’re essentially doing the exact same thing) and a little worse than those for <code>Eindhoven -&gt; Eindhoven</code> (because my laptop is faster than the ec2 instances). This seems to be the case. I would also expect <code>Frankfurt -&gt; Sydney</code> to be comparable to <code>Sydney -&gt; Frankfurt</code>, which is also the case.</p><p>The results might give the impression that there’s little reason to prefer gRPC over REST. This is caused by the fact that we’re not using gRPC to its fullest potential. For this experiment, we’re using blocking communication and don’t process the stream of vectors vector by vector. In real-world scenarios, however, it might be benificial to use asynchronous communication, and deal with input and output as streams.</p><h2>Conclusion</h2><p>To conclude, here are some bullet points with simplistic advice:</p><ul><li>If you only care about response size, use REST and JSON, enable compression, and call it a day.</li><li>If you want your data to be typed and keep things simple, use REST and protocol buffers.</li><li>If you want to handle your input and output as streams, use gRPC.</li></ul>
+
+<p>
+  <i>Published: 2019-02-19</i>
+  
+</p>
+
+<p>
+  <i>
+  Tagged:
+  
+  <span class="tag">
+    <a href="tags/gRPC.html">gRPC</a>
+  </span>
+  
+  <span class="tag">
+    <a href="tags/Protocol-buffers.html">Protocol buffers</a>
+  </span>
+  
+  </i>
+</p>
+
+
+    </div>
+  </body>
+</html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Running multiple Docker containers in parallel with Jenkins</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link type="application/atom+xml" rel="alternate" href="atom.xml" title="Running multiple Docker containers in parallel with Jenkins">
+    
+      <link rel="canonical" href="https://www.kabisa.nl/tech/running-multiple-docker-containers-in-parallel-with-jenkins">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/themes/prism.min.css">
+    <link rel="stylesheet" href="style.css">
+
+    
+
+    <meta name="title" content="Running multiple Docker containers in parallel with Jenkins">
+    <meta name="twitter:title" content="Running multiple Docker containers in parallel with Jenkins">
+    <meta property="og:title" content="Running multiple Docker containers in parallel with Jenkins">
+    <meta property="og:type" content="website">
+    
+    
+      <meta name="twitter:url" content="https://blog.cofx.nl/parallel-docker-containers-jenkins.html">
+      <meta property="og:url" content="https://blog.cofx.nl/parallel-docker-containers-jenkins.html">
+    
+    
+      <meta name="twitter:card" content="summary">
+    
+    
+    
+  </head>
+  <body>
+    <div class="header">
+      <h1 class="site-title">
+        <a class="page-link" href="index.html">BBC: blog by cofx</a>
+      </h1>
+      <div class="site-nav">
+        <a class="page-link" href="archive.html">Archive</a>
+        <a class="page-link" href="tags/index.html">Tags</a>
+        <a class="page-link" href="atom.xml">Feed</a>
+      </div>
+    </div>
+    <div class="wrapper">
+      <h1>
+  
+  Running multiple Docker containers in parallel with Jenkins
+  
+</h1>
+<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>This morning, I was looking for a way to run multiple Docker containers in parallel with Jenkins. Even though this seemed like a common use case to me, it took me a while to find all information I needed and piece it together. As you know, the only design pattern you need is copy-paste. I wrote this post to allow you and my future self to copy-paste some useful snippets from a Jenkinsfile.</p><p>Suppose you have a Java app that requires a PostgreSQL database. If you want to run a few integration tests for that app, you’ll probably need this database to be accessible as well. To make it possible for Jenkins to run these integration tests for you, you could just install PostgreSQL on the machine running Jenkins, create the necessary databases and users, and call it a day. However, I’d rather keep each app in its own Docker container and only have apps running when they’re needed.</p><p>Consider the following Jenkinsfile:</p><pre><code class="lang-groovy">def withDockerNetwork&#40;Closure inner&#41; {
+  try {
+    networkId = UUID.randomUUID&#40;&#41;.toString&#40;&#41;
+    sh &quot;docker network create ${networkId}&quot;
+    inner.call&#40;networkId&#41;
+  } finally {
+    sh &quot;docker network rm ${networkId}&quot;
+  }
+}
+
+pipeline {
+  agent none
+
+  stages {
+    stage&#40;&quot;test&quot;&#41; {
+      agent any
+
+      steps {
+        script {
+          def database = docker.build&#40;&quot;database&quot;, &quot;database&quot;&#41;
+          def app = docker.build&#40;&quot;app&quot;, &quot;-f dockerfiles/ci/Dockerfile .&quot;&#41;
+
+          withDockerNetwork{ n -&gt;
+            database.withRun&#40;&quot;--network ${n} --name database&quot;&#41; { c -&gt;
+              app.inside&#40;&quot;&quot;&quot;
+                --network ${n}
+                -e 'SPRING&#95;DATASOURCE&#95;URL=jdbc:postgresql://database:5432/test'
+              &quot;&quot;&quot;&#41; {
+                sh &quot;mvn verify&quot;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre><p>The function <code>withDockerNetwork</code> (copy-pasted from <a href='https://issues.jenkins-ci.org/browse/JENKINS-49567'>Ryan Desmon</a>) creates and eventually deletes a Docker network with a random name. After creating the network, it calls a block of code of your choice and provides it with this random name. After the block of code has finished, the network is deleted.</p><p>The statement <code>docker.build&#40;&quot;database&quot;, &quot;database&quot;&#41;</code> builds a Docker image named “database” with the context <code>database</code>. The statement <code>docker.build&#40;&quot;app&quot;, &quot;-f dockerfiles/ci/Dockerfile .&quot;&#41;</code> builds a Docker image named “app” from the Dockerfile <code>dockerfiles/ci/Dockerfile</code> with context <code>.</code>.</p><p>Once both images are built, containers based on these images are started and connected to the same network, allowing them to communicate. The arguments <code>--network ${n}</code> are used to connect both containers to the network. The container for the database is given a name explicitly with the argument <code>--name database</code>, so that we can point the app to it. The latter is achieved by setting an environment variable with the argument <code>-e 'SPRING&#95;DATASOURCE&#95;URL=jdbc:postgresql://database:5432/test'</code>. This last step is specific to Spring. You’ll probably need to do something completely different for your own use case.</p><p>Once both containers are running, the tests for the app are executed by the step <code>sh &quot;mvn verify&quot;</code>. This step is specific to Java and Maven and is again unrelated to running containers in parallel.</p><p>If you want to see this in action, take a look at <a href='https://github.com/ljpengelen/java-meetup-jwt'>https://github.com/ljpengelen/java-meetup-jwt</a>. The example above is a simplified version of the Jenkinsfile used for this project.</p>
+
+<p>
+  <i>Published: 2019-08-19</i>
+  
+</p>
+
+<p>
+  <i>
+  Tagged:
+  
+  <span class="tag">
+    <a href="tags/Jenkins.html">Jenkins</a>
+  </span>
+  
+  <span class="tag">
+    <a href="tags/Docker.html">Docker</a>
+  </span>
+  
+  </i>
+</p>
+
+
+    </div>
+  </body>
+</html>

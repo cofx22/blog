@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Browser beats I: synthesizing a kick drum</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link type="application/atom+xml" rel="alternate" href="atom.xml" title="Browser beats I: synthesizing a kick drum">
+    
+      <link rel="canonical" href="https://www.kabisa.nl/tech/browser-beats-i-synthesizing-a-kick-drum">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/themes/prism.min.css">
+    <link rel="stylesheet" href="style.css">
+
+    
+
+    <meta name="title" content="Browser beats I: synthesizing a kick drum">
+    <meta name="twitter:title" content="Browser beats I: synthesizing a kick drum">
+    <meta property="og:title" content="Browser beats I: synthesizing a kick drum">
+    <meta property="og:type" content="website">
+    
+    
+      <meta name="twitter:url" content="https://blog.cofx.nl/browser-beats-kick-drum.html">
+      <meta property="og:url" content="https://blog.cofx.nl/browser-beats-kick-drum.html">
+    
+    
+      <meta name="twitter:card" content="summary">
+    
+    
+    
+  </head>
+  <body>
+    <div class="header">
+      <h1 class="site-title">
+        <a class="page-link" href="index.html">BBC: blog by cofx</a>
+      </h1>
+      <div class="site-nav">
+        <a class="page-link" href="archive.html">Archive</a>
+        <a class="page-link" href="tags/index.html">Tags</a>
+        <a class="page-link" href="atom.xml">Feed</a>
+      </div>
+    </div>
+    <div class="wrapper">
+      <h1>
+  
+  Browser beats I: synthesizing a kick drum
+  
+</h1>
+<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>Because I wanted to gain some experience in working with <a href='https://angular.io/'>Angular</a> and <a href='https://ngrx.io/'>NgRx</a>, I started building a sample-based step sequencer that runs in the browser. To do that, I had to dive into the <a href='https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API'>Web Audio API</a>. I’ll write something about that step sequencer later. First, I want to take a look at the basics of the Web Audio API and try to synthesize a kick drum.</p><h2>The basis</h2><p>At the basis of most syntesized kick drums, there’s a sine wave, or something that’s close to a sine wave. The function below produces a sine wave with a frequency of 55Hz that plays for the duration of ten seconds.</p><pre><code class="lang-JavaScript">const play = &#40;&#41; =&gt; {
+    const audioContextClass = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new audioContextClass&#40;&#41;;
+
+    const sine = audioContext.createOscillator&#40;&#41;;
+    sine.type = 'sine';
+    sine.frequency.value = 55;
+
+    sine.start&#40;audioContext.currentTime&#41;;
+    sine.stop&#40;audioContext.currentTime + 10&#41;;
+}
+</code></pre><p>It sounds like this: (You might not hear it over your laptop’s speakers. You’ll need decent speakers or headphones that are able to reproduce low frequencies.)</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/sine-55Hz.mp3"></audio></p><p>When you visualize that sound, as shown below, you’ll see why it’s called a sine wave. The left-hand side of the figure shows the waveform, and the right-hand side shows the sound spectrum.</p><p><img src="assets/browser-beats-i/sine-55Hz.png" alt="Sine at 55Hz" /></p><p>The sound spectrum is almost completely empty, except for a narrow spike at the rightmost end. This explains why you might not hear the sound over your laptop speakers, for example. Not all speakers are capable of reproducing sounds at low frequencies. You can emulate the frequency response of such speakers by applying a high-pass filter. If you filter out all frequencies below 120Hz, this is what’s left of our sine wave:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/sine-55Hz-high-pass-120Hz.mp3"></audio></p><p>The graphs below further illustrate that not much is left of the original sound.</p><p><img src="assets/browser-beats-i/sine-55Hz-high-pass-120Hz.png" alt="Sine at 55Hz through a high-pass filter at 120Hz" /></p><p>What does that mean for our synthesized kick drum? We’ll apply a trick to make your ears believe that there’s still some bass to be heard, even when listening to speakers that can’t reproduce low frequencies very well. Instead of a sine wave, we’ll start out with a triangle wave.</p><pre><code class="lang-JavaScript">const play = &#40;&#41; =&gt; {
+    const audioContextClass = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new audioContextClass&#40;&#41;;
+
+    const triangle = audioContext.createOscillator&#40;&#41;;
+    triangle.type = 'triangle';
+    triangle.frequency.value = 55;
+
+    triangle.connect&#40;audioContext.destination&#41;;
+
+    triangle.start&#40;audioContext.currentTime&#41;;
+    triangle.stop&#40;audioContext.currentTime + 10&#41;;
+}
+</code></pre><p>Without further processing, it will look like this:</p><p><img src="assets/browser-beats-i/triangle-55Hz.png" alt="Triangle at 55Hz" /></p><p>It’s again clear where the name comes from. It’s also clear that there’s much more going on in the spectrum graph.</p><p>Unfortunately, it sounds a little abrasive, like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/triangle-55Hz.mp3"></audio></p><p>Ideally, we’d like to process this triangle wave in such a way that it sounds more like the sine wave, without cutting off too much of the high-frequency sounds. We can do that using a wave shaper.</p><pre><code class="lang-JavaScript">const distortionCurve = &#40;amount&#41; =&gt; {
+    const numberOfSamples = 44100;
+    const curve = new Float32Array&#40;numberOfSamples&#41;;
+    const deg = Math.PI / 180;
+    for &#40;let i = 0; i &lt; numberOfSamples; ++i&#41; {
+        const x = i &#42; 2 / numberOfSamples - 1;
+        curve&#91;i&#93; = &#40;3 + amount&#41; &#42; x &#42; 20 &#42; deg / &#40; Math.PI + amount &#42; Math.abs&#40;x&#41; &#41;;
+    }
+    return curve;
+};
+
+const play = &#40;&#41; =&gt; {
+    const audioContextClass = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new audioContextClass&#40;&#41;;
+
+    const triangle = audioContext.createOscillator&#40;&#41;;
+    triangle.type = 'triangle';
+    triangle.frequency.value = 55;
+
+    const waveShaper = audioContext.createWaveShaper&#40;&#41;;
+    waveShaper.curve = distortionCurve&#40;5&#41;;
+
+    triangle.connect&#40;waveShaper&#41;;
+    waveShaper.connect&#40;audioContext.destination&#41;;
+
+    triangle.start&#40;audioContext.currentTime&#41;;
+    triangle.stop&#40;audioContext.currentTime + 10&#41;;
+}
+</code></pre><p>The curve I’m using above comes from a <a href='https://stackoverflow.com/questions/22312841/waveshaper-node-in-webaudio-how-to-emulate-distortion'>Stack Overflow</a> answer by <a href='https://stackoverflow.com/users/717965/kevin-ennis'>Kevin Ennis</a>. In theory, there are multiple <a href='https://en.wikipedia.org/wiki/Sigmoid_function'>Sigmoid functions</a> that you could use. I only tried this one and stuck with it because I liked the result.</p><p>Speaking of results, here are the graphs for this sound:</p><p><img src="assets/browser-beats-i/triangle-55Hz-waveshaper.png" alt="Triangle at 55Hz through a wave shaper" /></p><p>The triangles look a lot more like sines, and there is still something going on at the higher end of the frequency spectrum. The resulting sound sounds like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/triangle-55Hz-waveshaper.mp3"></audio></p><p>The <a href='https://webaudio.github.io/web-audio-api/#dom-waveshapernode-curve'>W3C spec</a> gives a good explanation of what’s actually going on when you apply a wave shaper with a certain curve. I won’t go into the details here.</p><p>What did we achieve with this detour? If we filter out the low frequencies again to simulate cheaper speakers, we end up with the following sound:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/triangle-55Hz-waveshaper-high-pass.mp3"></audio></p><p>The graphs for this filtered sound are shown below. When you compare these to the ones for the filtered sine wave shown above, you’ll notice that there’s still something to hear after removing the low end. This is enough for you ears to trick you into believing that there’s actually some low end left, even when there isn’t.</p><p><img src="assets/browser-beats-i/triangle-waveshaper-high-pass.png" alt="Triangle at 55Hz through a wave shaper and a high-pass filter at 120Hz" /></p><h2>Make it boom</h2><p>The sound we ended up with sounds a little like “WOOOOOOOOOOH”. Let’s turn that into a “WOOOOM”.</p><pre><code class="lang-JavaScript">const play = &#40;&#41; =&gt; {
+    const audioContextClass = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new audioContextClass&#40;&#41;;
+
+    const triangle = audioContext.createOscillator&#40;&#41;;
+    triangle.type = 'triangle';
+    triangle.frequency.value = 55;
+
+    const waveShaper = audioContext.createWaveShaper&#40;&#41;;
+    waveShaper.curve = distortionCurve&#40;5&#41;;
+
+    const triangleGainNode = audioContext.createGain&#40;&#41;;
+    triangleGainNode.gain.value = 1;
+    triangleGainNode.gain.linearRampToValueAtTime&#40;0, audioContext.currentTime + 0.6&#41;
+
+    triangle.connect&#40;waveShaper&#41;;
+    waveShaper.connect&#40;triangleGainNode&#41;;
+    triangleGainNode.connect&#40;audioContext.destination&#41;;
+
+    triangle.start&#40;audioContext.currentTime&#41;;
+    triangle.stop&#40;audioContext.currentTime + 1&#41;;
+}
+</code></pre><p>In the snippet above, you’ll see that we’re using a gain node to gradually fade out over the course of 600 milliseconds. The end result sounds like this.</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/release.mp3"></audio></p><p>Now that we have something that sounds like “WOOOOM”, let’s make it sound like “BOOOOM”.</p><pre><code class="lang-JavaScript">const play = &#40;&#41; =&gt; {
+    const audioContextClass = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new audioContextClass&#40;&#41;;
+
+    const triangle = audioContext.createOscillator&#40;&#41;;
+    triangle.type = 'triangle';
+    triangle.frequency.value = 220;
+    triangle.frequency.exponentialRampToValueAtTime&#40;55, audioContext.currentTime + 0.1&#41;;
+
+    const waveShaper = audioContext.createWaveShaper&#40;&#41;;
+    waveShaper.curve = distortionCurve&#40;5&#41;;
+
+    const triangleGainNode = audioContext.createGain&#40;&#41;;
+    triangleGainNode.gain.value = 1;
+    triangleGainNode.gain.linearRampToValueAtTime&#40;0, audioContext.currentTime + 0.6&#41;
+
+    triangle.connect&#40;waveShaper&#41;;
+    waveShaper.connect&#40;triangleGainNode&#41;;
+    triangleGainNode.connect&#40;audioContext.destination&#41;;
+
+    triangle.start&#40;audioContext.currentTime&#41;;
+    triangle.stop&#40;audioContext.currentTime + 1&#41;;
+}
+</code></pre><p>As shown above, we do that be quickly lowering the frequency of the triangle wave from 220Hz to 55Hz over the course of 100 milliseconds. The end result sounds like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/pitch.mp3"></audio></p><p>If you want to achieve more of a 90s Euro house vibe, you can drop down from a higher frequency.</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/pitch-extreme.mp3"></audio></p><h2>White noise</h2><p>If you look at <a href='https://www.soundonsound.com/techniques/practical-bass-drum-synthesis'>how classic synthesizers emulate kick drums</a>, you’ll see that they’ll often use a little white noise to give the kicks a little more body. The Web Audio API doesn’t provide (white) noise out of the box, but you can use an audio buffer to <a href='https://noisehack.com/generate-noise-web-audio-api/'>create your own</a>.</p><pre><code class="lang-JavaScript">const generateWhiteNoiseBuffer = &#40;numberOfSamples&#41; =&gt; {
+    const buffer = audioContext.createBuffer&#40;1, numberOfSamples, audioContext.sampleRate&#41;;
+
+    const data = buffer.getChannelData&#40;0&#41;;
+    for &#40;let i = 0; i &lt; numberOfSamples; ++i&#41; {
+        data&#91;i&#93; = Math.random&#40;&#41; &#42; 2 - 1;
+    }
+
+    return buffer;
+}
+
+const whiteNoiseBuffer = generateWhiteNoiseBuffer&#40;audioContext.sampleRate&#41;;
+
+const whiteNoiseBufferSource = &#40;&#41; =&gt; {
+    const bufferSource = audioContext.createBufferSource&#40;&#41;;
+    bufferSource.buffer = whiteNoiseBuffer;
+    bufferSource.loop = true;
+    bufferSource.loopEnd = audioContext.sampleRate
+    return bufferSource;
+}
+</code></pre><p>Each buffer source returned by the function whiteNoiseBufferSource can only be started once. The same holds for the oscillator nodes that we’ve been creating above. The buffer returned by generateWhiteNoiseBuffer, however, can be reused. The result sounds like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/white-noise.mp3"></audio></p><p>The next step is to apply a fade to this sound, just like we did before.</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/white-noise-release.mp3"></audio></p><p>After that, we cut of most of the higher frequencies using a low pass filter.</p><pre><code class="lang-JavaScript">const play = &#40;&#41; =&gt; {
+
+    ...
+
+    const noise = whiteNoiseBufferSource&#40;&#41;;
+
+    const noiseGainNode = audioContext.createGain&#40;&#41;;
+    noiseGainNode.gain.value = 1;
+    noiseGainNode.gain.linearRampToValueAtTime&#40;0, audioContext.currentTime + 0.2&#41;;
+
+    const noiseFilter = audioContext.createBiquadFilter&#40;&#41;;
+    noiseFilter.type = 'lowpass';
+    noiseFilter.frequency.value = 120;
+
+    noise.connect&#40;noiseGainNode&#41;;
+    noiseGainNode.connect&#40;noiseFilter&#41;;
+    noiseFilter.connect&#40;audioContext.destination&#41;;
+
+    noise.start&#40;audioContext.currentTime&#41;;
+    noise.stop&#40;audioContext.currentTime + 1&#41;;
+};
+</code></pre><p>The end result sounds like this:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/white-noise-low-pass.mp3"></audio></p><h2>End result</h2><p>Combining the sine-like wave and the filtered white noise leads to the following result:</p><p><audio controls="" src="https://ljpengelen.github.io/groovid19/kick/audio/triangle-and-noise.mp3"></audio></p><p>All you need is a handful of other instruments and you’re halfway making the next big dance hit, in your browser.</p><h2>Conclusion</h2><p>Let’s put the results of all this hard work into action. First, open Youtube, Spotify or whatever streaming service you like to play your favorite song. Then, visit <a href='https://ljpengelen.github.io/groovid19/kick-snare-hihat.html'>https://ljpengelen.github.io/groovid19/kick-snare-hihat.html</a> and press <code>q</code>, <code>w</code>, and <code>e</code> to drum along. Enjoy!</p>
+
+<p>
+  <i>Published: 2020-05-25</i>
+  
+</p>
+
+<p>
+  <i>
+  Tagged:
+  
+  <span class="tag">
+    <a href="tags/Browser-beats.html">Browser beats</a>
+  </span>
+  
+  </i>
+</p>
+
+
+    </div>
+  </body>
+</html>
