@@ -8,7 +8,11 @@
       content="default-src 'self';
         media-src 'self' https://ljpengelen.github.io/groovid19/;
         script-src 'self' https://livejs.com https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/;
-        style-src 'self' https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/ 'unsafe-inline'"/>
+        style-src 'self' https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/
+          'sha256-iRtqXVmOMp/hyF5UngK6PellD3q+F7toTW0WZBpaIyk='
+          'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU';
+        object-src 'none';
+        base-uri 'none'"/>
     <link type="application/atom+xml" rel="alternate" href="atom.xml" title="BBC: blog by cofx">
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-core.min.js"></script>
@@ -345,7 +349,7 @@ const whiteNoiseBufferSource = &#40;&#41; =&gt; {
   </a>
   
 </h1>
-<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>A few years ago, I gave a talk about JSON Web Tokens (JWTs) during a Meetup for Java enthusiasts in Eindhoven. Triggered by a talk about JWTs I attended recently, I decided to dust of my presentation and the demo applications I made back then to see whether they still hold up. It turns out that life is a little harder in 2019 than it was in 2016, at least as far as security and JWTs are concerned. Before we go into the details, we should first discuss the basics.</p><h2>JSON Web Tokens</h2><p>Essentially, a JSON Web Token is something that a server application would give to a client application, which the client would then use to authenticate itself with the server when doing requests. A JSON Web Token looks something like this:</p><p><strong style="word-break: break-all"> <span style="color: red">eyJhbGciOiJIUzUxMiJ9</span>.<span style="color: fuchsia">eyJleHAiOjE0NzYyOTAxNDksInN1YiI6IjEifQ</span>.<span style="color: blue">mvJEWu3kxm0WSUKu-qEVTBmuelM-2Te-VJHEFclVt_uR89ya0hNawkrgftQbAd-28lycLX2jXCgOGrA3XRg9Jg</span> </strong></p><p>If you look closely, you’ll see that it consists of three base64-encoded strings, joined by periods. If you decode the ones above, you end up with the following:</p><pre><code class="lang-json">{
+<p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>A few years ago, I gave a talk about JSON Web Tokens (JWTs) during a Meetup for Java enthusiasts in Eindhoven. Triggered by a talk about JWTs I attended recently, I decided to dust of my presentation and the demo applications I made back then to see whether they still hold up. It turns out that life is a little harder in 2019 than it was in 2016, at least as far as security and JWTs are concerned. Before we go into the details, we should first discuss the basics.</p><h2>JSON Web Tokens</h2><p>Essentially, a JSON Web Token is something that a server application would give to a client application, which the client would then use to authenticate itself with the server when doing requests. A JSON Web Token looks something like this:</p><p><strong class="word-break-break-all"> <span class="red">eyJhbGciOiJIUzUxMiJ9</span>.<span class="fuchsia">eyJleHAiOjE0NzYyOTAxNDksInN1YiI6IjEifQ</span>.<span class="blue">mvJEWu3kxm0WSUKu-qEVTBmuelM-2Te-VJHEFclVt_uR89ya0hNawkrgftQbAd-28lycLX2jXCgOGrA3XRg9Jg</span> </strong></p><p>If you look closely, you’ll see that it consists of three base64-encoded strings, joined by periods. If you decode the ones above, you end up with the following:</p><pre><code class="lang-json">{
   &quot;alg&quot;: &quot;HS512&quot;
 }
 </code></pre><pre><code class="lang-json">{

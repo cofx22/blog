@@ -103,3 +103,19 @@ code[class*=language-] {
   font-family: Menlo, Consolas, Monaco, Liberation Mono, Lucida Console, monospace;
   font-size: 0.875rem;
 }
+
+.word-break-break-all {
+  word-break: break-all;
+}
+
+.red {
+  color: red;
+}
+
+.fuchsia {
+  color: fuchsia;
+}
+
+.blue {
+  color: blue;
+}
