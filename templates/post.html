@@ -11,7 +11,13 @@
 {% if discuss %}
   <p>Discuss this post <a href="{{discuss}}">here</a>.</p>
 {% endif %}
-<p><i>Published: {{date}}</i></p>
+<p>
+  <i>Published: {{date}}</i>
+  {% if last-updated-on %}
+    -
+    <i>Last updated: {{last-updated-on}}</i>
+  {% endif %}
+</p>
 {% if tags %}
 <p>
   <i>

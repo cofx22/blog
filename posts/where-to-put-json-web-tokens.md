@@ -1,5 +1,6 @@
 Title: Where to put JSON Web Tokens in 2019
 Date: 2019-08-26
+Last-updated-on: 2023-01-06
 Tags: JSON Web Tokens
 Canonical-URL: https://www.kabisa.nl/tech/where-to-put-json-web-tokens-in-2019
 
