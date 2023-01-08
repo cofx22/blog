@@ -289,6 +289,10 @@ You can't do that with an anti-CSRF token by itself.
 However, if that anti-CSRF token is obtained via XSS or any other way of injecting and executing arbitrary JavaScript, then it's also possible to use JavaScript to perform HTTP requests that include both the anti-CRSF token and the cookie containing the JWT.
 Even without obtaining the JWT itself, the same kind of abuse is possible.
 
+As the [OWASP CSRF prevention cheat sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html) says:
+
+> ”... any Cross-Site Scripting (XSS) can be used to defeat all CSRF mitigation techniques!"
+
 In conclusion, it's not worth going through all the extra trouble to pass JWTs along in cookies.
 
 It's good to know that the more complicated approach has no benefits over the simpler approach.
