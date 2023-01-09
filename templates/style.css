@@ -3,6 +3,7 @@
 }
 
 html {
+  min-width: 17rem;
   width: 100%;
 }
 
