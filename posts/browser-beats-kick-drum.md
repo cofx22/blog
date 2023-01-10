@@ -10,6 +10,8 @@ To do that, I had to dive into the [Web Audio API](https://developer.mozilla.org
 I’ll write something about that step sequencer later.
 First, I want to take a look at the basics of the Web Audio API and try to synthesize a kick drum.
 
+<!-- end-of-preview -->
+
 ## The basis
 
 At the basis of most syntesized kick drums, there’s a sine wave, or something that’s close to a sine wave.

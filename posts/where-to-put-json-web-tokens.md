@@ -13,6 +13,8 @@ It turns out that life is a little harder in 2019 than it was in 2016,
 at least as far as security and JWTs are concerned.
 Before we go into the details, we should first discuss the basics.
 
+<!-- end-of-preview -->
+
 ## JSON Web Tokens
 
 Essentially, a JSON Web Token is something that a server application would give to a client application, which the client would then use to authenticate itself with the server when doing requests. A JSON Web Token looks something like this:

@@ -9,6 +9,8 @@ In the previous installment of browser beats, we used the [Web Audio API](https:
 This time, we’ll look at snares and hi-hats.
 Once you know how to synthesize kicks, snares and hi-hats are not far away.
 
+<!-- end-of-preview -->
+
 ## Snare
 
 The snare sound we’ll synthesize consists of two components.
