@@ -1,4 +1,4 @@
-{:deps {io.github.borkdude/quickblog {:git/sha "a0256e57b4f10a48ff37ea58b9daff79be67fcb8"}}
+{:deps {io.github.borkdude/quickblog {:local/root "../../os/quickblog"}}
  :tasks {:requires ([quickblog.cli :as cli])
          :init (def opts {:blog-author "cofx"
                           :blog-root "https://blog.cofx.nl"
