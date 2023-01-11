@@ -8,7 +8,13 @@
         {% if post.discuss %}
             <p>Discuss this post <a href="{{post.discuss}}">here</a>.</p>
         {% endif %}
-        <p><i>Published: {{post.date}}</i></p>
+        <p>
+            <i>Published: {{post.date}}</i>
+            {% if post.last-updated-on %}
+            -
+            <i>Last updated: {{post.last-updated-on}}</i>
+          {% endif %}
+        </p>
         {% if post.tags %}
             <p><i>
                 Tagged:
