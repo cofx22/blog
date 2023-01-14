@@ -3,6 +3,6 @@
          :init (def opts {:blog-author "cofx"
                           :blog-root "https://blog.cofx.nl"
                           :blog-title "BBC: blog by cofx"
-                          :favicon false})
+                          :favicon true})
          quickblog {:doc "Start blogging quickly! Run `bb quickblog help` for details."
                     :task (cli/dispatch opts)}}}
