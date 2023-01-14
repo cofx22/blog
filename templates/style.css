@@ -69,6 +69,11 @@ h1 {
 a {
   color:rgb(51, 65, 85);
   font-weight: bold;
+  transition: color 0.2s;
+}
+
+a:hover {
+  color: #2aa0a2;
 }
 
 h2 {
