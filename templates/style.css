@@ -80,12 +80,18 @@ p {
   margin-top: 0.2em;
 }
 
-ul.index {
+ul.index,
+ul.tags {
   list-style: none;
   padding-left: 0;
 }
 
-.index li {
+ul.tags {
+  column-count: 2;
+}
+
+.index li,
+.tags li {
   margin-bottom: 1em;
 }
 
