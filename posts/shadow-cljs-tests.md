@@ -26,7 +26,7 @@ In my experience, documentation and advice about this topic is scattered around 
 For this reason, I decided to document three ways of running tests in this blog post.
 There are more alternatives, but I'll probably stick with a combination of the following for now.
 
-## Compiling and running tests on the command line
+## Running tests on the command line
 
 ## Running tests in the browser
 
