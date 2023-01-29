@@ -110,6 +110,11 @@ npx shadow-cljs watch test --config-merge '{:autorun true}'
 
 ## Running tests in the browser
 
+There's another way to automatically run all tests each time a file is changed.
+The `:browser-test` build target can be used to generate a web page that shows the results of your tests.
+Starting a `watch` build for this build target will regenerate this page each time a file is changed.
+The configuration below is enough to get you started, but there are [additional options](https://shadow-cljs.github.io/docs/UsersGuide.html#target-browser-test).
+
 ```clojure
 ...
 :builds {...
@@ -122,11 +127,22 @@ npx shadow-cljs watch test --config-merge '{:autorun true}'
 ...
 ```
 
+The configuration above will produce the web page containing test results in the folder `out/test`.
+It also sets up an HTTP server on port `3001` that will serve this page.
+
+If all tests pass, the page will look like this:
+
 ![All tests pass](assets/shadow-cljs-tests/success.png)
 
-
+If any of the tests fail, the page will look like this:
 
 ![One tests fails](assets/shadow-cljs-tests/failure.png)
+
+Essentially, you'll get the same feedback as you'd get on the command line.
+
+Because the favicon changes from green to red when any of the tests fail,
+you don't need to keep a close eye on this page all the time during development.
+As long as you have it open in a browser tab, you'll notice the color change soon enough when something breaks.
 
 ## Running tests from the REPL
 
