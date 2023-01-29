@@ -146,6 +146,17 @@ As long as you have it open in a browser tab, you'll notice the color change soo
 
 ## Running tests from the REPL
 
+For some reason, I had high hopes for this final way of running tests.
+It took me quite some time before I understood what I had to do to run tests from the REPL.
+In the end, I wonder if there will be situations where I prefer this method over the ones above.
+
+The library [cljs.test](https://clojurescript.org/tools/testing) contains a macro [run-all-tests](https://cljs.github.io/api/cljs.test/run-all-tests), which runs all tests in all namespaces.
+When you start a `watch` build for your shadow-cljs app and execute this macro, you'll most likely see a list of test results for all libraries used by your app.
+What it probably won't show are the test results for your own app.
+
+Because the main entrypoint for your app won't refer to any of your test namespaces, these namespaces can't be found by `run-all-tests`.
+Since you don't want the main entrypoint of your app to refer to any test namespace, you
+
 ```clojure
 (ns cljs.user
   (:require [cljs.test]
@@ -155,3 +166,11 @@ As long as you have it open in a browser tab, you'll notice the color change soo
   (cljs.test/run-all-tests)
   (cljs.test/run-all-tests #"rsi.*-test"))
 ```
+
+The last line of the snippet above shows how you can restrict `run-all-tests` to the namespaces containing the tests for your app.
+Most likely, you're not interested in seeing the test results for all your dependencies.
+
+## Conclusion
+
+As mentioned above, I'm not sure which combination of these methods I'll use in the future.
+I'll definitely run tests on the command line for CI builds.
