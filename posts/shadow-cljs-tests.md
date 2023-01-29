@@ -12,22 +12,130 @@ Because of the size and nature of these applications, I wasn't too worried about
 Because Clojure and ClojureScript have excellent support for REPL-driven development, the need for tests as a means for quick feedback also disappeared.
 As a result, I wrote a few tests for these applications, but not nearly as many as I used to.
 
-Deep down inside, however, I knew I would have to invest some time into learning about testing Clojure and ClojureScript applications at some point.
+Deep down inside, however, I knew I would have to invest some time into learning more about testing Clojure and ClojureScript applications at some point.
 I wouldn't want to work in a team that produced software without decent test coverage.
 I should hold myself to that same standard.
-This week, I decided to sit down and take some time to look into running tests for ClojureScript apps powered by [shadow-cljs](https://github.com/thheller/shadow-cljs).
+This week, I decided to sit down and take some time to look into different ways to execute tests for ClojureScript apps powered by [shadow-cljs](https://github.com/thheller/shadow-cljs).
 As you may know, shadow-cljs is one of the two de facto standard tools for creating ClojureScript apps.
-The other, equally well-known tool is [Figwheel](https://figwheel.org/).
+The other is [Figwheel](https://figwheel.org/).
 
 <!-- end-of-preview -->
 
 There are a number of different ways to execute tests for a shadow-cljs based ClojureScript application.
-In my experience, documentation and advice about this topic is scattered around the internet and Slack channels.
-For this reason, I decided to document three ways of running tests in this blog post.
+This blog post covers three of them and a number of variations.
 There are more alternatives, but I'll probably stick with a combination of the following for now.
 
 ## Running tests on the command line
 
+shadow-cljs supports a number of build targets for building and running tests.
+One of them if the `:node-test` target, which will gather all tests from namespaces that match a given regex and produces a build that includes these tests and a test runner for executing them.
+
+The following configuration is the absolute minimum you need to get started.
+Additional configuration options are described in the [user guide for shadow-cljs](https://shadow-cljs.github.io/docs/UsersGuide.html#target-node-test).
+
+```clojure
+...
+:builds {...
+         :test {:target :node-test
+                :output-to "out/node-tests.js"}
+         ...}
+...
+```
+
+Given the configuration above, executing `npx shadow-cljs compile test` will result in the creation of a file named `out/node-test.js`, which can be executed with node.
+
+```bash
+npx shadow-cljs compile test
+node out/node-test.js
+```
+
+Executing the file leads to output like this when there are no failures:
+
+```clojure
+shadow-cljs - updating dependencies
+shadow-cljs - dependencies updated
+[:test] Compiling ...
+[:test] Build completed. (60 files, 1 compiled, 0 warnings, 2,28s)
+
+Testing rsi.multiplication-tables-test
+
+Ran 1 tests containing 3 assertions.
+0 failures, 0 errors.
+```
+
+When there are failures, the output will show which assertion failed and why:
+
+```clojure
+[:test] Compiling ...
+[:test] Build completed. (60 files, 2 compiled, 0 warnings, 2,34s)
+
+Testing rsi.multiplication-tables-test
+
+FAIL in (transforming-state) (rsi/multiplication_tables_test.cljs:8:11)
+correct answer on time
+expected: (= {:question [1 2], :score 2, :highscore 22, :mode :against-the-clock, :wrongly-answered #{}, :deadline-passed? false} (process-answer {:question [2 3], :score 1, :highscore 1, :wrongly-answered #{}} "6" [1 2]))
+  actual: (not (= {:question [1 2], :score 2, :highscore 22, :mode :against-the-clock, :wrongly-answered #{}, :deadline-passed? false} {:question [1 2], :score 2, :highscore 2, :deadline-passed? false, :wrongly-answered #{}, :mode :against-the-clock}))
+
+Ran 1 tests containing 3 assertions.
+1 failures, 0 errors.
+```
+
+If all tests pass, the exit code is zero.
+If any test fails, the exit code is one.
+That makes running tests like this a good option for CI servers.
+
+If you prefer running tests in a headless browser instead of node, there's also a build target for [Karma](https://shadow-cljs.github.io/docs/UsersGuide.html#target-karma).
+As long as your test don't touch any code that uses browser-only APIs, running them in node is fine.
+Tests like the following will fail when run with node, however:
+
+```clojure
+(deftest log
+  (is (= 1 ((fn [] (js/alert "1") 1)))))
+```
+
+Especially when combining unit tests with end-to-end tests executed via something like [Cypress](https://www.cypress.io/) or [Etaoin](https://github.com/clj-commons/etaoin),
+I think it's perfectly reasonable to restrict the unit tests to testing pure functions and testing browser-specific functionality with the end-to-end tests.
+
+Functions that make use of browser-only APIs that can't be tested efficiently via end-to-end tests could be extracted into a separate library, which could then be tested via Karma.
+This could make sense for functions that use localStorage, sessionStorage, cookies, or a canvas, for example.
+
+The `:node-test` target has an optional configuration option `:autorun`.
+When set to `true`, all tests will be executed automatically after building them.
+Using this option in combination with the `watch` build command makes it possible to automatically run all tests each time a file is changed.
+You can either include the `:autorun` option directly in your configuration, or add it later on the command line when starting the `watch` build:
+
+```bash
+npx shadow-cljs watch test --config-merge '{:autorun true}'
+```
+
 ## Running tests in the browser
 
+```clojure
+...
+:builds {...
+         :browser-test {:target :browser-test
+                        :test-dir "out/test"}
+         ...}
+:dev-http {...
+           3001 "out/test"
+           ...}
+...
+```
+
+![All tests pass](assets/shadow-cljs-tests/success.png)
+
+
+
+![One tests fails](assets/shadow-cljs-tests/failure.png)
+
 ## Running tests from the REPL
+
+```clojure
+(ns cljs.user
+  (:require [cljs.test]
+            [rsi.multiplication-tables-test]))
+
+(comment
+  (cljs.test/run-all-tests)
+  (cljs.test/run-all-tests #"rsi.*-test"))
+```
