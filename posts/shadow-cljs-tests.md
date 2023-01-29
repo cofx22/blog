@@ -14,7 +14,7 @@ As a result, I wrote a few tests for these applications, but not nearly as many 
 
 Deep down inside, however, I knew I would have to invest some time into learning more about testing Clojure and ClojureScript applications at some point.
 I wouldn't want to work in a team that produced software without decent test coverage.
-I should hold myself to that same standard.
+I should hold myself to the same standard.
 This week, I decided to sit down and take some time to look into different ways to execute tests for ClojureScript apps powered by [shadow-cljs](https://github.com/thheller/shadow-cljs).
 As you may know, shadow-cljs is one of the two de facto standard tools for creating ClojureScript apps.
 The other is [Figwheel](https://figwheel.org/).
@@ -44,14 +44,14 @@ Additional configuration options are described in the [user guide for shadow-clj
 
 Given the configuration above, executing `npx shadow-cljs compile test` will result in the creation of a file named `out/node-test.js`, which can be executed with node.
 
-```bash
+```shell-session
 npx shadow-cljs compile test
 node out/node-test.js
 ```
 
 Executing the file leads to output like this when there are no failures:
 
-```clojure
+```shell-session
 shadow-cljs - updating dependencies
 shadow-cljs - dependencies updated
 [:test] Compiling ...
@@ -65,7 +65,7 @@ Ran 1 tests containing 3 assertions.
 
 When there are failures, the output will show which assertion failed and why:
 
-```clojure
+```shell-session
 [:test] Compiling ...
 [:test] Build completed. (60 files, 2 compiled, 0 warnings, 2,34s)
 
@@ -85,7 +85,7 @@ If any test fails, the exit code is one.
 That makes running tests like this a good option for CI servers.
 
 If you prefer running tests in a headless browser instead of node, there's also a build target for [Karma](https://shadow-cljs.github.io/docs/UsersGuide.html#target-karma).
-As long as your test don't touch any code that uses browser-only APIs, running them in node is fine.
+As long as your test don't touch any code that uses browser-only APIs, I'd say that running them in node is fine.
 Tests like the following will fail when run with node, however:
 
 ```clojure
@@ -100,11 +100,11 @@ Functions that make use of browser-only APIs that can't be tested efficiently vi
 This could make sense for functions that use localStorage, sessionStorage, cookies, or a canvas, for example.
 
 The `:node-test` target has an optional configuration option `:autorun`.
-When set to `true`, all tests will be executed automatically after building them.
+When set to `true`, all tests will be executed automatically after creating a build.
 Using this option in combination with the `watch` build command makes it possible to automatically run all tests each time a file is changed.
 You can either include the `:autorun` option directly in your configuration, or add it later on the command line when starting the `watch` build:
 
-```bash
+```shell-session
 npx shadow-cljs watch test --config-merge '{:autorun true}'
 ```
 
@@ -151,11 +151,16 @@ It took me quite some time before I understood what I had to do to run tests fro
 In the end, I wonder if there will be situations where I prefer this method over the ones above.
 
 The library [cljs.test](https://clojurescript.org/tools/testing) contains a macro [run-all-tests](https://cljs.github.io/api/cljs.test/run-all-tests), which runs all tests in all namespaces.
-When you start a `watch` build for your shadow-cljs app and execute this macro, you'll most likely see a list of test results for all libraries used by your app.
+When you start a `watch` build for your shadow-cljs app and execute this macro in the REPL, you'll most likely see a list of test results for all libraries used by your app.
 What it probably won't show are the test results for your own app.
 
 Because the main entrypoint for your app won't refer to any of your test namespaces, these namespaces can't be found by `run-all-tests`.
-Since you don't want the main entrypoint of your app to refer to any test namespace, you
+Since you don't want the main entrypoint of your app to refer to any test namespace, you'll need another way of including them in your development build.
+
+One way of achieving this involves the `cljs.user` namespace.
+This namespace is automatically loaded in each ClojureScript REPL started by shadow-cljs.
+The example below shows the content of a file named `cljs/user.cljs` that loads the namespaces `cljs.test` and `rsi.multiplication-tables-test`.
+As a result, the namespace `rsi.multiplication-tables-test` will be found by `run-all-tests`.
 
 ```clojure
 (ns cljs.user
@@ -170,7 +175,14 @@ Since you don't want the main entrypoint of your app to refer to any test namesp
 The last line of the snippet above shows how you can restrict `run-all-tests` to the namespaces containing the tests for your app.
 Most likely, you're not interested in seeing the test results for all your dependencies.
 
+Many editors that support Clojure offer functionality to trigger the evaluation of custom snippets of Clojure when a certain combination of keys is pressed.
+You could use that functionality to evaluate something like `(cljs.test/run-all-tests #"rsi.*-test")` each time you want to run your tests.
+Make sure to evaluate test definitions after you've changed them, however, before running the tests.
+Otherwise, `run-all-tests` will execute the previous version of your tests.
+
 ## Conclusion
 
 As mentioned above, I'm not sure which combination of these methods I'll use in the future.
 I'll definitely run tests on the command line for CI builds.
+I'll probably won't be running tests in the REPL very often.
+Evaluating changed test definitions before running tests requires additional key presses, and there's some extra work needed to keep `cljs/user.cljs` up to date.
