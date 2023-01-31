@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Dependency injection and protocols in Clojure</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google-site-verification" content="mk6IbhC-HpwMcak2aPoSmSXuSeSZTPedoNa9kRldGa8">
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+        media-src 'self' https://ljpengelen.github.io/groovid19/;
+        script-src 'self' https://livejs.com https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/;
+        style-src 'self' https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/
+          'sha256-iRtqXVmOMp/hyF5UngK6PellD3q+F7toTW0WZBpaIyk='
+          'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU';
+        img-src 'self' data:;
+        object-src 'none';
+        base-uri 'none'">
+    <link type="application/atom+xml" rel="alternate" href="atom.xml" title="Dependency injection and protocols in Clojure">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/themes/prism.min.css">
+    <link rel="stylesheet" href="style.css">
+
+        <link rel="apple-touch-icon" sizes="180x180" href="assets/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon/favicon-16x16.png">
+    <link rel="icon" type="image/x-icon" href="assets/favicon/favicon.ico" />
+    <link rel="manifest" href="assets/favicon/site.webmanifest">
+    <link rel="mask-icon" href="assets/favicon/safari-pinned-tab.svg" color="#2aa0a2">
+    <meta name="msapplication-TileColor" content="#2aa0a2">
+    <meta name="theme-color" content="#2aa0a2">
+
+
+    <meta name="title" content="Dependency injection and protocols in Clojure">
+    <meta name="twitter:title" content="Dependency injection and protocols in Clojure">
+    <meta property="og:title" content="Dependency injection and protocols in Clojure">
+    <meta property="og:type" content="website">
+    
+    
+      <meta name="twitter:url" content="https://blog.cofx.nl/dependency-injection-and-protocols-in-clojure.html">
+      <meta property="og:url" content="https://blog.cofx.nl/dependency-injection-and-protocols-in-clojure.html">
+    
+    
+      <meta name="twitter:card" content="summary">
+    
+    
+    
+  </head>
+  <body>
+    <div class="header">
+      <a href="https://cofx.nl"><img src="/assets/cofx-logo-vierkant.svg" alt="cofx logo"/></a>
+      <div class="header-right">
+        <h1 class="site-title">
+          <a class="page-link" href="/">blog by cofx</a>
+        </h1>
+        <div class="site-nav">
+          <a class="page-link" href="archive.html">Archive</a>
+          <a class="page-link" href="tags/index.html">Tags</a>
+          <a class="page-link" href="atom.xml">Feed</a>
+        </div>
+      </div>
+    </div>
+    <div class="wrapper">
+      <h1>
+  
+  Dependency injection and protocols in Clojure
+  
+</h1>
+<p>Consider the following function, which</p><ul><li>takes a map of dependencies and a ring request,</li><li>updates a gift using data from the request, and</li><li>returns a ring response:</li></ul><!-- force end of list --><pre><code class="lang-clojure">&#40;defn update-gift &#91;{:keys &#91;datasource&#93;} request&#93;
+  &#40;let &#91;{:keys &#91;external-list-id external-gift-id&#93;} &#40;:path-params request&#41;
+        {:keys &#91;name ok price description&#93;} &#40;:params request&#41;&#93;
+    &#40;when ok
+      &#40;domain/update-gift! datasource external-gift-id name price description&#41;&#41;
+    &#40;response/redirect &#40;str &quot;/list/&quot; external-list-id &quot;/edit&quot;&#41; :see-other&#41;&#41;&#41;
+</code></pre><p>The function <code>domain/update-gift!</code> persists the changes to the database. It has a side effect, which makes it an impure function. Because <code>update-gift</code> uses <code>domain/update-gift!</code>, it's impure too.</p><p>You could argue that this fact alone is a reason to refactor this code. Generally speaking, pure functions are easier to test and easier to reason about, which are both good reasons to prefer pure functions over impure ones.</p><!-- end-of-preview --><p>For simple apps, however, you could also argue that there's not much to reason about anyway, and refactoring may not be worth the effort. What's more,  using <a href='https://clojuredocs.org/clojure.core/with-redefs'>with-redefs</a> to replace the impure function <code>domain/update-gift!</code> would make testing quite straightforward.</p><p>Because this blog post is about dependency injection, we better find another reason to refactor <code>update-gift</code> and apply some more dependency injection. Luckily, we can pretend that we want to replace the function <code>domain/update-gift!</code> with a function that uses a completely different method to persist gifts. That's not something you would do with <code>with-redefs</code>.</p><p>Let's look at the (spoiler alert) naive approach were we introduce a parameter to inject the function <code>domain/update-gift!</code> directly as a function.</p><pre><code class="lang-clojure">&#40;defn update-gift &#91;{:keys &#91;datasource update-gift!&#93;} request&#93;
+  &#40;let &#91;{:keys &#91;external-list-id external-gift-id&#93;} &#40;:path-params request&#41;
+        {:keys &#91;name ok price description&#93;} &#40;:params request&#41;&#93;
+    &#40;when ok
+      &#40;update-gift! datasource external-gift-id name price description&#41;&#41;
+    &#40;response/redirect &#40;str &quot;/list/&quot; external-list-id &quot;/edit&quot;&#41; :see-other&#41;&#41;&#41;
+</code></pre><p>As I mentioned above, the first argument to the function <code>update-gift</code> is a map of dependencies. In the example above, the key <code>update-gift!</code> of that map should map to a function for persisting updated gifts.</p><p>The downside of this approach is that there's no static analysis that your IDE can apply to provide you with useful information about this function. In fact, it can't even tell you that the key <code>update-gift!</code> maps to a function at all. You yourself have to remember that <code>update-gift!</code> is a function that takes a datasource, an external gift ID, a name, a price, and a description, in that order. If you forget, you have to navigate to the place where you call <code>update-gift</code> and see what it was again that you inject under the key <code>update-gift!</code>.</p><p>You could argue that this is what you get when you use a dynamically typed language instead of a statically typed one, and you would be right. However, there are good reasons to prefer dynamically typed languages over statically typed ones, and there are ways around this particular problem.</p><h2>Protocols to the rescue</h2><p>We can use protocols to help static analysis tools a little. A <a href='https://clojuredocs.org/clojure.core/defprotocol'>protocol</a> is a named set of named methods and their signatures. They're similar to Java's interfaces.</p><p>The following snippet shows the definition of a simple protocol named <code>GiftService</code>. This protocol defines a single method <code>update-gift!</code>, which takes a concrete implementation of the protocol as first argument together with a number of additional arguments.</p><pre><code class="lang-clojure">&#40;defprotocol GiftService
+  &#40;update-gift!
+    &#91;this datasource external-id name price description&#93;
+    &quot;Update the gift with ID `external-id` with the given name, price, and description&quot;&#41;&#41;
+</code></pre><p>There are a number of ways to create concrete implementations of protocols. The following snippet shows one way, which uses <a href='https://clojuredocs.org/clojure.core/reify'>reify</a>.</p><pre><code class="lang-clojure">&#40;defn create-gift-service &#91;&#93;
+  &#40;reify GiftService
+    &#40;update-gift!
+     &#91;&#95; datasource external-id name price description&#93;
+     &#40;db/update-gift! datasource {:id external-id
+                                  :name name
+                                  :price price
+                                  :description description}&#41;&#41;&#41;&#41;
+</code></pre><p>The snippet shows the definition of a constructor function <code>create-gift-service</code>, which creates a concrete implementation of the protocol <code>GiftService</code> by providing an implementation of the method <code>update-gift!</code>. This implementation ignores the gift service itself (hence the underscore) and passes its arguments to another function <code>db/update-gift!</code>.</p><p>In practice, most services would have more than one method, and these methods would do more than directly call a single function. The service could perform some validation, for example, or combine a number of more low-level functions that interact with a database.</p><p>Here's the same <code>update-gift</code> function again. This time, a gift-service is injected as a dependency.</p><pre><code class="lang-clojure">&#40;defn update-gift &#91;{:keys &#91;datasource gift-service&#93;} request&#93;
+  &#40;let &#91;{:keys &#91;external-list-id external-gift-id&#93;} &#40;:path-params request&#41;
+        {:keys &#91;name ok price description&#93;} &#40;:params request&#41;&#93;
+    &#40;when ok
+      &#40;domain/update-gift! gift-service datasource external-gift-id name price description&#41;&#41;
+    &#40;response/redirect &#40;str &quot;/list/&quot; external-list-id &quot;/edit&quot;&#41; :see-other&#41;&#41;&#41;
+</code></pre><p>This function is pure, like the previous version, which makes it easier to reason about and test. Because we're injecting a service and applying a method from a protocol to it, there's more information to work with for static analysis tools. The image below shows how such a tool can show the argument list and documentation of the protocol method <code>domain/update-gift!</code>.</p><p><img src="assets/dependency-injection-and-protocols/static-analysis.png" alt="Static analysis" /></p><p>Whether or not this final version is better than the first version depends a lot on the size of the app it is part of, the plans for this app, the team working on the app, etc. The point of this post is not to convince you that you should apply dependency injection where you can or that you should always use protocols when you do apply it. The point of this post is to show you that you can have your cake and eat it when it comes to dynamically typed languages and static analysis.</p>
+
+<p>
+  <i>Published: 2023-01-29</i>
+  
+</p>
+
+<p>
+  <i>
+  Tagged:
+  
+  <span class="tag">
+    <a href="tags/Clojure.html">Clojure</a>
+  </span>
+  
+  </i>
+</p>
+
+
+    </div>
+  </body>
+</html>
