@@ -35,7 +35,7 @@ Because this blog post is about dependency injection, we better find another rea
 Luckily, we can pretend that we want to replace the function `domain/update-gift!` with a function that uses a completely different method to persist gifts.
 That's not something you would do with `with-redefs`.
 
-Let's look at the (spoiler alert) naive approach were we introduce a parameter to inject the function `domain/update-gift!` directly as a function.
+Let's look at the (spoiler alert) naive approach where we introduce a parameter to inject the function `domain/update-gift!` directly as a function.
 
 ```clojure
 (defn update-gift [{:keys [datasource update-gift!]} request]
