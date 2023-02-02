@@ -1,6 +1,8 @@
 Title: Dependency injection and protocols in Clojure
 Date: 2023-01-29
 Tags: Clojure
+Image: assets/social/cofx-clojure.png
+Image-Alt: An image indicating that this post is about Clojure
 
 Consider the following function, which
 * takes a map of dependencies and a ring request,
