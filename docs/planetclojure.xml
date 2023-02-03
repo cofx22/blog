@@ -3,9 +3,105 @@
   <title>blog by cofx</title>
   <link href="https://blog.cofx.nl/atom.xml" rel="self"/>
   <link href="https://blog.cofx.nl"/>
-  <updated>2023-01-07T13:47:25+00:00</updated>
+  <updated>2023-02-03T10:48:47+00:00</updated>
   <id>https://blog.cofx.nl</id>
   <author>
     <name>cofx</name>
   </author>
+  <entry>
+    <id>https://blog.cofx.nl/dependency-injection-and-protocols-in-clojure.html</id>
+    <link href="https://blog.cofx.nl/dependency-injection-and-protocols-in-clojure.html"/>
+    <title>Dependency injection and protocols in Clojure</title>
+    <updated>2023-01-29T23:59:59+00:00</updated>
+    <content type="html">
+      <![CDATA[<p>Consider the following function, which</p><ul><li>takes a map of dependencies and a ring request,</li><li>updates a gift using data from the request, and</li><li>returns a ring response:</li></ul><!-- force end of list --><pre><code class="lang-clojure">&#40;defn update-gift &#91;{:keys &#91;datasource&#93;} request&#93;
+  &#40;let &#91;{:keys &#91;external-list-id external-gift-id&#93;} &#40;:path-params request&#41;
+        {:keys &#91;name ok price description&#93;} &#40;:params request&#41;&#93;
+    &#40;when ok
+      &#40;domain/update-gift! datasource external-gift-id name price description&#41;&#41;
+    &#40;response/redirect &#40;str &quot;/list/&quot; external-list-id &quot;/edit&quot;&#41; :see-other&#41;&#41;&#41;
+</code></pre><p>The function <code>domain/update-gift!</code> persists the changes to the database. It has a side effect, which makes it an impure function. Because <code>update-gift</code> uses <code>domain/update-gift!</code>, it's impure too.</p><p>You could argue that this fact alone is a reason to refactor this code. Generally speaking, pure functions are easier to test and easier to reason about, which are both good reasons to prefer pure functions over impure ones.</p><!-- end-of-preview --><p>For simple apps, however, you could also argue that there's not much to reason about anyway, and refactoring may not be worth the effort. What's more,  using <a href='https://clojuredocs.org/clojure.core/with-redefs'>with-redefs</a> to replace the impure function <code>domain/update-gift!</code> would make testing quite straightforward.</p><p>Because this blog post is about dependency injection, we better find another reason to refactor <code>update-gift</code> and apply some more dependency injection. Luckily, we can pretend that we want to replace the function <code>domain/update-gift!</code> with a function that uses a completely different method to persist gifts. That's not something you would do with <code>with-redefs</code>.</p><p>Let's look at the (spoiler alert) naive approach where we introduce a parameter to inject the function <code>domain/update-gift!</code> directly as a function.</p><pre><code class="lang-clojure">&#40;defn update-gift &#91;{:keys &#91;datasource update-gift!&#93;} request&#93;
+  &#40;let &#91;{:keys &#91;external-list-id external-gift-id&#93;} &#40;:path-params request&#41;
+        {:keys &#91;name ok price description&#93;} &#40;:params request&#41;&#93;
+    &#40;when ok
+      &#40;update-gift! datasource external-gift-id name price description&#41;&#41;
+    &#40;response/redirect &#40;str &quot;/list/&quot; external-list-id &quot;/edit&quot;&#41; :see-other&#41;&#41;&#41;
+</code></pre><p>As I mentioned above, the first argument to the function <code>update-gift</code> is a map of dependencies. In the example above, the key <code>update-gift!</code> of that map should map to a function for persisting updated gifts.</p><p>The downside of this approach is that there's no static analysis that your IDE can apply to provide you with useful information about this function. In fact, it can't even tell you that the key <code>update-gift!</code> maps to a function at all. You yourself have to remember that <code>update-gift!</code> is a function that takes a datasource, an external gift ID, a name, a price, and a description, in that order. If you forget, you have to navigate to the place where you call <code>update-gift</code> and see what it was again that you inject under the key <code>update-gift!</code>.</p><p>You could argue that this is what you get when you use a dynamically typed language instead of a statically typed one, and you would be right. However, there are good reasons to prefer dynamically typed languages over statically typed ones, and there are ways around this particular problem.</p><h2>Protocols to the rescue</h2><p>We can use protocols to help static analysis tools a little. A <a href='https://clojuredocs.org/clojure.core/defprotocol'>protocol</a> is a named set of named methods and their signatures. They're similar to Java's interfaces.</p><p>The following snippet shows the definition of a simple protocol named <code>GiftService</code>. This protocol defines a single method <code>update-gift!</code>, which takes a concrete implementation of the protocol as first argument together with a number of additional arguments.</p><pre><code class="lang-clojure">&#40;defprotocol GiftService
+  &#40;update-gift!
+    &#91;this datasource external-id name price description&#93;
+    &quot;Update the gift with ID `external-id` with the given name, price, and description&quot;&#41;&#41;
+</code></pre><p>There are a number of ways to create concrete implementations of protocols. The following snippet shows one way, which uses <a href='https://clojuredocs.org/clojure.core/reify'>reify</a>.</p><pre><code class="lang-clojure">&#40;defn create-gift-service &#91;&#93;
+  &#40;reify GiftService
+    &#40;update-gift!
+     &#91;&#95; datasource external-id name price description&#93;
+     &#40;db/update-gift! datasource {:id external-id
+                                  :name name
+                                  :price price
+                                  :description description}&#41;&#41;&#41;&#41;
+</code></pre><p>The snippet shows the definition of a constructor function <code>create-gift-service</code>, which creates a concrete implementation of the protocol <code>GiftService</code> by providing an implementation of the method <code>update-gift!</code>. This implementation ignores the gift service itself (hence the underscore) and passes its arguments to another function <code>db/update-gift!</code>.</p><p>In practice, most services would have more than one method, and these methods would do more than directly call a single function. The service could perform some validation, for example, or combine a number of more low-level functions that interact with a database.</p><p>Here's the same <code>update-gift</code> function again. This time, a gift-service is injected as a dependency.</p><pre><code class="lang-clojure">&#40;defn update-gift &#91;{:keys &#91;datasource gift-service&#93;} request&#93;
+  &#40;let &#91;{:keys &#91;external-list-id external-gift-id&#93;} &#40;:path-params request&#41;
+        {:keys &#91;name ok price description&#93;} &#40;:params request&#41;&#93;
+    &#40;when ok
+      &#40;domain/update-gift! gift-service datasource external-gift-id name price description&#41;&#41;
+    &#40;response/redirect &#40;str &quot;/list/&quot; external-list-id &quot;/edit&quot;&#41; :see-other&#41;&#41;&#41;
+</code></pre><p>This function is pure, like the previous version, which makes it easier to reason about and test. Because we're injecting a service and applying a method from a protocol to it, there's more information to work with for static analysis tools. The image below shows how such a tool can show the argument list and documentation of the protocol method <code>domain/update-gift!</code>.</p><p><img src="assets/dependency-injection-and-protocols/static-analysis.png" alt="Static analysis" /></p><p>Whether or not this final version is better than the first version depends a lot on the size of the app it is part of, the plans for this app, the team working on the app, etc. The point of this post is not to convince you that you should apply dependency injection where you can or that you should always use protocols when you do apply it. The point of this post is to show you that you can have your cake and eat it when it comes to dynamically typed languages and static analysis.</p>]]>
+    </content>
+  </entry>
+  <entry>
+    <id>https://blog.cofx.nl/shadow-cljs-tests.html</id>
+    <link href="https://blog.cofx.nl/shadow-cljs-tests.html"/>
+    <title>shadow-cljs and running tests</title>
+    <updated>2023-01-27T23:59:59+00:00</updated>
+    <content type="html">
+      <![CDATA[<p>When I used to work on front ends based on JavaScript or TypeScript, I usually had <a href='https://karma-runner.github.io/latest/index.html'>Karma</a> running in watch mode while developing. Each time I saved a file, all (unit) tests would run. This would give me a short feedback loop, letting me know quickly when I was unintentionally breaking things and constantly indicating whether what I was creating matched its specifications as defined by the tests. In other words, tests were used to prevent regressions, but also as a tool to quickly see whether I was building the right things.</p><p>In the last few years, I've been using Clojure and ClojureScript to create prototypes and utilities at work as well as hobby projects and apps for personal use. Because of the size and nature of these applications, I wasn't too worried about regressions. Because Clojure and ClojureScript have excellent support for REPL-driven development, the need for tests as a means for quick feedback also disappeared. As a result, I wrote a few tests for these applications, but not nearly as many as I used to.</p><p>Deep down inside, however, I knew I would have to invest some time into learning more about testing Clojure and ClojureScript applications at some point. I wouldn't want to work in a team that produced software without decent test coverage. I should hold myself to the same standard. This week, I decided to sit down and take some time to look into different ways to execute tests for ClojureScript apps powered by <a href='https://github.com/thheller/shadow-cljs'>shadow-cljs</a>. As you may know, shadow-cljs is one of the two de facto standard tools for creating ClojureScript apps. The other is <a href='https://figwheel.org/'>Figwheel</a>.</p><!-- end-of-preview --><p>There are a number of different ways to execute tests for a shadow-cljs based ClojureScript application. This blog post covers three of them and a number of variations. There are more alternatives, but I'll probably stick with a combination of the following for now.</p><h2>Running tests on the command line</h2><p>shadow-cljs supports a number of build targets for building and running tests. One of them if the <code>:node-test</code> target, which will gather all tests from namespaces that match a given regex and produces a build that includes these tests and a test runner for executing them.</p><p>The following configuration is the absolute minimum you need to get started. Additional configuration options are described in the <a href='https://shadow-cljs.github.io/docs/UsersGuide.html#target-node-test'>user guide for shadow-cljs</a>.</p><pre><code class="lang-clojure">...
+:builds {...
+         :test {:target :node-test
+                :output-to &quot;out/node-tests.js&quot;}
+         ...}
+...
+</code></pre><p>Given the configuration above, executing <code>npx shadow-cljs compile test</code> will result in the creation of a file named <code>out/node-test.js</code>, which can be executed with node.</p><pre><code class="lang-shell-session">npx shadow-cljs compile test
+node out/node-test.js
+</code></pre><p>Executing the file leads to output like this when there are no failures:</p><pre><code class="lang-shell-session">shadow-cljs - updating dependencies
+shadow-cljs - dependencies updated
+&#91;:test&#93; Compiling ...
+&#91;:test&#93; Build completed. &#40;60 files, 1 compiled, 0 warnings, 2,28s&#41;
+
+Testing rsi.multiplication-tables-test
+
+Ran 1 tests containing 3 assertions.
+0 failures, 0 errors.
+</code></pre><p>When there are failures, the output will show which assertion failed and why:</p><pre><code class="lang-shell-session">&#91;:test&#93; Compiling ...
+&#91;:test&#93; Build completed. &#40;60 files, 2 compiled, 0 warnings, 2,34s&#41;
+
+Testing rsi.multiplication-tables-test
+
+FAIL in &#40;transforming-state&#41; &#40;rsi/multiplication&#95;tables&#95;test.cljs:8:11&#41;
+correct answer on time
+expected: &#40;= {:question &#91;1 2&#93;, :score 2, :highscore 22, :mode :against-the-clock, :wrongly-answered #{}, :deadline-passed? false} &#40;process-answer {:question &#91;2 3&#93;, :score 1, :highscore 1, :wrongly-answered #{}} &quot;6&quot; &#91;1 2&#93;&#41;&#41;
+  actual: &#40;not &#40;= {:question &#91;1 2&#93;, :score 2, :highscore 22, :mode :against-the-clock, :wrongly-answered #{}, :deadline-passed? false} {:question &#91;1 2&#93;, :score 2, :highscore 2, :deadline-passed? false, :wrongly-answered #{}, :mode :against-the-clock}&#41;&#41;
+
+Ran 1 tests containing 3 assertions.
+1 failures, 0 errors.
+</code></pre><p>If all tests pass, the exit code is zero. If any test fails, the exit code is one. That makes running tests like this a good option for CI servers.</p><p>If you prefer running tests in a headless browser instead of node, there's also a build target for <a href='https://shadow-cljs.github.io/docs/UsersGuide.html#target-karma'>Karma</a>. As long as your test don't touch any code that uses browser-only APIs, I'd say that running them in node is fine. Tests like the following will fail when run with node, however:</p><pre><code class="lang-clojure">&#40;deftest log
+  &#40;is &#40;= 1 &#40;&#40;fn &#91;&#93; &#40;js/alert &quot;1&quot;&#41; 1&#41;&#41;&#41;&#41;&#41;
+</code></pre><p>Especially when combining unit tests with end-to-end tests executed via something like <a href='https://www.cypress.io/'>Cypress</a> or <a href='https://github.com/clj-commons/etaoin'>Etaoin</a>, I think it's perfectly reasonable to restrict the unit tests to testing pure functions and testing browser-specific functionality with the end-to-end tests.</p><p>Functions that make use of browser-only APIs that can't be tested efficiently via end-to-end tests could be extracted into a separate library, which could then be tested via Karma. This could make sense for functions that use localStorage, sessionStorage, cookies, or a canvas, for example.</p><p>The <code>:node-test</code> target has an optional configuration option <code>:autorun</code>. When set to <code>true</code>, all tests will be executed automatically after creating a build. Using this option in combination with the <code>watch</code> build command makes it possible to automatically run all tests each time a file is changed. You can either include the <code>:autorun</code> option directly in your configuration, or add it later on the command line when starting the <code>watch</code> build:</p><pre><code class="lang-shell-session">npx shadow-cljs watch test --config-merge '{:autorun true}'
+</code></pre><h2>Running tests in the browser</h2><p>There's another way to automatically run all tests each time a file is changed. The <code>:browser-test</code> build target can be used to generate a web page that shows the results of your tests. Starting a <code>watch</code> build for this build target will regenerate this page each time a file is changed. The configuration below is enough to get you started, but there are <a href='https://shadow-cljs.github.io/docs/UsersGuide.html#target-browser-test'>additional options</a>.</p><pre><code class="lang-clojure">...
+:builds {...
+         :browser-test {:target :browser-test
+                        :test-dir &quot;out/test&quot;}
+         ...}
+:dev-http {...
+           3001 &quot;out/test&quot;
+           ...}
+...
+</code></pre><p>The configuration above will produce the web page containing test results in the folder <code>out/test</code>. It also sets up an HTTP server on port <code>3001</code> that will serve this page.</p><p>If all tests pass, the page will look like this:</p><p><img src="assets/shadow-cljs-tests/success.png" alt="All tests pass" /></p><p>If any of the tests fail, the page will look like this:</p><p><img src="assets/shadow-cljs-tests/failure.png" alt="One tests fails" /></p><p>Essentially, you'll get the same feedback as you'd get on the command line.</p><p>Because the favicon changes from green to red when any of the tests fail, you don't need to keep a close eye on this page all the time during development. As long as you have it open in a browser tab, you'll notice the color change soon enough when something breaks.</p><h2>Running tests from the REPL</h2><p>For some reason, I had high hopes for this final way of running tests. It took me quite some time before I understood what I had to do to run tests from the REPL. In the end, I wonder if there will be situations where I prefer this method over the ones above.</p><p>The library <a href='https://clojurescript.org/tools/testing'>cljs.test</a> contains a macro <a href='https://cljs.github.io/api/cljs.test/run-all-tests'>run-all-tests</a>, which runs all tests in all namespaces. When you start a <code>watch</code> build for your shadow-cljs app and execute this macro in the REPL, you'll most likely see a list of test results for all libraries used by your app. What it probably won't show are the test results for your own app.</p><p>Because the main entrypoint for your app won't refer to any of your test namespaces, these namespaces can't be found by <code>run-all-tests</code>. Since you don't want the main entrypoint of your app to refer to any test namespace, you'll need another way of including them in your development build.</p><p>One way of achieving this involves the <code>cljs.user</code> namespace. This namespace is automatically loaded in each ClojureScript REPL started by shadow-cljs. The example below shows the content of a file named <code>cljs/user.cljs</code> that loads the namespaces <code>cljs.test</code> and <code>rsi.multiplication-tables-test</code>. As a result, the namespace <code>rsi.multiplication-tables-test</code> will be found by <code>run-all-tests</code>.</p><pre><code class="lang-clojure">&#40;ns cljs.user
+  &#40;:require &#91;cljs.test&#93;
+            &#91;rsi.multiplication-tables-test&#93;&#41;&#41;
+
+&#40;comment
+  &#40;cljs.test/run-all-tests&#41;
+  &#40;cljs.test/run-all-tests #&quot;rsi.&#42;-test&quot;&#41;&#41;
+</code></pre><p>The last line of the snippet above shows how you can restrict <code>run-all-tests</code> to the namespaces containing the tests for your app. Most likely, you're not interested in seeing the test results for all your dependencies.</p><p>Many editors that support Clojure offer functionality to trigger the evaluation of custom snippets of Clojure when a certain combination of keys is pressed. You could use that functionality to evaluate something like <code>&#40;cljs.test/run-all-tests #&quot;rsi.&#42;-test&quot;&#41;</code> each time you want to run your tests. Make sure to evaluate test definitions after you've changed them, however, before running the tests. Otherwise, <code>run-all-tests</code> will execute the previous version of your tests.</p><h2>Conclusion</h2><p>As mentioned above, I'm not sure which combination of these methods I'll use in the future. I'll definitely run tests on the command line for CI builds. I'll probably won't be running tests in the REPL very often. Evaluating changed test definitions before running tests requires additional key presses, and there's some extra work needed to keep <code>cljs/user.cljs</code> up to date.</p>]]>
+    </content>
+  </entry>
 </feed>
