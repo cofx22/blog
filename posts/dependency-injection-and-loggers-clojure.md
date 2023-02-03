@@ -14,7 +14,6 @@ Let's do that and see where we end up.
 
 The protocol `Logger` below consists of a single method `info`.
 The constructor function `create-logger` returns a concrete implementation of `Logger`, which delegates to `log/info`.
-This may seem convoluted, but remember that we're doing this to keep as many functions as possible pure, also those that need to log.
 
 ```clojure
 (ns logging
