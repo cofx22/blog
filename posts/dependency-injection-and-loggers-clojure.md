@@ -8,7 +8,7 @@ Logging functions have to be impure to be useful.
 If they don't change the state of the world around them by writing something somewhere, why would you use them?
 This makes any function that uses a logging function directly impure too.
 If that is something you want to avoid, you could inject a logging service and use that instead of the logging function.
-Let's do that and see why it's not the ideal solution.
+Let's do that and see where we end up.
 
 <!-- end-of-preview -->
 
