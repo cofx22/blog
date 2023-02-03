@@ -84,7 +84,7 @@ In fact, the macro `twice` could have been a function.
 Most people would say that if something can be implemented as a function, then it should be implemented as function, not a macro.
 The problem with our logger, however, is a perfect fit for macros.
 
-Let's look at the new `Logger` protocol and the corresponding constructor function first.
+Here's a new version of the `Logger` protocol and the corresponding constructor function:
 
 ```clojure
 (ns logging
