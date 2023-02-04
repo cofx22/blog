@@ -71,6 +71,15 @@
       <div class="post-previews">
     
         <div class="post-preview">
+            <h1><a href="dependency-injection-and-loggers-clojure.html">Dependency injection and loggers in Clojure</a></h1>
+            <p>Logging functions have to be impure to be useful. If they don't change the state of the world around them by writing something somewhere, why would you use them? This makes any function that uses a logging function directly impure too. If that is something you want to avoid, you could inject a logging service and use that instead of the logging function. Let's do that and see what challenges we come across.</p>
+            
+                <p><a href="dependency-injection-and-loggers-clojure.html">Continue reading</a></p>
+            
+            
+        </div>
+    
+        <div class="post-preview">
             <h1><a href="dependency-injection-and-protocols-in-clojure.html">Dependency injection and protocols in Clojure</a></h1>
             <p>Consider the following function, which</p><ul><li>takes a map of dependencies and a ring request,</li><li>updates a gift using data from the request, and</li><li>returns a ring response:</li></ul><!-- force end of list --><pre><code class="lang-clojure">&#40;defn update-gift &#91;{:keys &#91;datasource&#93;} request&#93;
   &#40;let &#91;{:keys &#91;external-list-id external-gift-id&#93;} &#40;:path-params request&#41;
@@ -90,15 +99,6 @@
             <p>When I used to work on front ends based on JavaScript or TypeScript, I usually had <a href='https://karma-runner.github.io/latest/index.html'>Karma</a> running in watch mode while developing. Each time I saved a file, all (unit) tests would run. This would give me a short feedback loop, letting me know quickly when I was unintentionally breaking things and constantly indicating whether what I was creating matched its specifications as defined by the tests. In other words, tests were used to prevent regressions, but also as a tool to quickly see whether I was building the right things.</p><p>In the last few years, I've been using Clojure and ClojureScript to create prototypes and utilities at work as well as hobby projects and apps for personal use. Because of the size and nature of these applications, I wasn't too worried about regressions. Because Clojure and ClojureScript have excellent support for REPL-driven development, the need for tests as a means for quick feedback also disappeared. As a result, I wrote a few tests for these applications, but not nearly as many as I used to.</p><p>Deep down inside, however, I knew I would have to invest some time into learning more about testing Clojure and ClojureScript applications at some point. I wouldn't want to work in a team that produced software without decent test coverage. I should hold myself to the same standard. This week, I decided to sit down and take some time to look into different ways to execute tests for ClojureScript apps powered by <a href='https://github.com/thheller/shadow-cljs'>shadow-cljs</a>. As you may know, shadow-cljs is one of the two de facto standard tools for creating ClojureScript apps. The other is <a href='https://figwheel.org/'>Figwheel</a>.</p>
             
                 <p><a href="shadow-cljs-tests.html">Continue reading</a></p>
-            
-            
-        </div>
-    
-        <div class="post-preview">
-            <h1><a href="browser-beats-snare-and-hi-hat.html">Browser beats II: synthesizing a snare drum and a hi-hat</a></h1>
-            <p><em>This post first appeared on <a href='https://www.kabisa.nl/tech/'>Kabisa's Tech Blog</a>.</em></p><p>In the previous installment of browser beats, we used the <a href='https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API'>Web Audio API</a> to synthesize a kick drum. This time, we’ll look at snares and hi-hats. Once you know how to synthesize kicks, snares and hi-hats are not far away.</p>
-            
-                <p><a href="browser-beats-snare-and-hi-hat.html">Continue reading</a></p>
             
             
         </div>
