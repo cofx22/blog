@@ -1,5 +1,5 @@
 Title: Dependency injection and loggers in Clojure
-Date: 2023-02-03
+Date: 2023-02-04
 Tags: Clojure
 Image: assets/social/cofx-clojure.png
 Image-Alt: An image indicating that this post is about Clojure
@@ -8,12 +8,13 @@ Logging functions have to be impure to be useful.
 If they don't change the state of the world around them by writing something somewhere, why would you use them?
 This makes any function that uses a logging function directly impure too.
 If that is something you want to avoid, you could inject a logging service and use that instead of the logging function.
-Let's do that and see where we end up.
+Let's do that and see what challenges we come across.
 
 <!-- end-of-preview -->
 
 The protocol `Logger` below consists of a single method `info`.
-The constructor function `create-logger` returns a concrete implementation of `Logger`, which delegates to `log/info`.
+The constructor function `create-logger` returns a concrete implementation of `Logger`,
+which delegates to `clojure.tools.logging/info`.
 
 ```clojure
 (ns logging
@@ -104,9 +105,11 @@ Here's a new version of the `Logger` protocol and the corresponding constructor 
 This version of the protocol consists of a single method named `-log`, where the minus-sign indicates that the method is not meant to be called directly.
 (It can be called directly, but it's not meant to be.)
 What's most noteworthy about this method is that it takes an argument `ns`.
-The constructor function creates a logger by passing the value of `ns` to the logger factory of `clojure.tools.logging`.
+The constructor function creates a logger by passing the value of `ns` to the logger factory of `clojure.tools.logging`,
+and that logger is then used to do the actual logging via `log/log*`.
 
-How can we pass the namespace in which we're logging something to this method without doing so explicitly?
+This change itself doesn't bring us any closer to solving our problem, however.
+We still need to figure out how to pass the namespace in which we're logging something to the method `-log` without doing so explicitly.
 Part of the answer lies in `*ns*`, an object [representing the current namespace](https://clojuredocs.org/clojure.core/*ns*).
 Using a function in the `logging` namespace to pass along `*ns*` wouldn't work however, because we would be passing along that namespace again.
 The second part of the answer lies in using a macro.
@@ -128,6 +131,24 @@ To provide an API that is a little more pleasant to use, the macro above is comb
 (defmacro error [logger message throwable]
   `(log ~logger :error ~message throwable))
 ```
+
+Now that we've defined this collection of macros, we can evaluate the following expression.
+
+```clojure
+(ns domain
+  (:require [logging :refer [create-logger info]]))
+
+(info (create-logger) "a message to log")
+```
+
+At compile time, the expression on the last line expands to the following:
+
+```clojure
+(logging/-log (create-logger) #namespace[domain] :info "a message to log" nil)
+```
+
+At runtime, the message "a message to log" is logged at log level "INFO", with a reference to the namespace "domain",
+which is exactly what we set out to achieve.
 
 Let's put these new macros to use:
 
