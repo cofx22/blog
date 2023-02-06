@@ -1,0 +1,74 @@
+.tiny-utterances {
+    display: flex;
+    flex-direction: column;
+    font-family: -apple-system, BlinkMacSystemFont, avenir next, avenir, segoe ui, helvetica neue, helvetica, Cantarell, Ubuntu, roboto, noto, arial, sans-serif;
+    font-size: 14px;
+    gap: 1rem;
+}
+
+.tu-comment {
+    border-radius: 0.25rem;
+    border: 1px solid #d0d7de;
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+}
+
+.tu-comment h1,
+.tu-comment h2 {
+    border-bottom: 1px solid hsla(210,18%,87%,1);
+    padding-bottom: 0.3rem;
+}
+
+.tu-comment a {
+    color: #0969da;
+    text-decoration: none;
+}
+
+.tu-comment a:hover {
+    text-decoration: underline;
+}
+
+.tu-comment ul.contains-task-list {
+    list-style-type: none;
+    padding: 0;
+}
+
+.tu-comment blockquote {
+    border-left: 0.25rem solid #d0d7de;
+    margin: 0 0 1rem;
+    padding: 0 1rem;
+}
+
+.tu-comment blockquote p {
+    margin: 0;
+    padding: 0;
+}
+
+.tu-header {
+    align-items: center;
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+}
+
+.tu-avatar {
+    border: 1px solid gray;
+    border-radius: 50%;
+    width: 2rem;
+}
+
+.tu-login {
+    font-weight: bold;
+}
+
+.tu-button {
+    background-color: #2da44e;
+    border-radius: 0.25rem;
+    color: white;
+    display: inline-block;
+    font-weight: 600;
+    padding: 0.5rem;
+    text-decoration: none;
+    width: fit-content;
+}

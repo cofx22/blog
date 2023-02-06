@@ -3,6 +3,7 @@ Date: 2023-01-27
 Tags: Clojure, ClojureScript
 Image: assets/social/cofx-shadow-cljs.png
 Image-Alt: An image indicating that this post is about shadow-cljs
+Issue: 3
 
 When I used to work on front ends based on JavaScript or TypeScript, I usually had [Karma](https://karma-runner.github.io/latest/index.html) running in watch mode while developing.
 Each time I saved a file, all (unit) tests would run.

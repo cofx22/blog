@@ -3,6 +3,7 @@ Date: 2023-01-29
 Tags: Clojure
 Image: assets/social/cofx-clojure.png
 Image-Alt: An image indicating that this post is about Clojure
+Issue: 5
 
 Consider the following function, which
 * takes a map of dependencies and a ring request,

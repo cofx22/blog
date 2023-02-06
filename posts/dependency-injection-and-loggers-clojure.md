@@ -3,6 +3,7 @@ Date: 2023-02-04
 Tags: Clojure
 Image: assets/social/cofx-clojure.png
 Image-Alt: An image indicating that this post is about Clojure
+Issue: 4
 
 Logging functions have to be impure to be useful.
 If they don't change the state of the world around them by writing something somewhere, why would you use them?
