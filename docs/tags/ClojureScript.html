@@ -7,21 +7,24 @@
     <meta name="google-site-verification" content="mk6IbhC-HpwMcak2aPoSmSXuSeSZTPedoNa9kRldGa8">
     <meta http-equiv="Content-Security-Policy"
       content="default-src 'self';
+        connect-src 'self' https://api.github.com/repos/cofx22/blog/issues/;
         media-src 'self' https://ljpengelen.github.io/groovid19/;
         script-src 'self' https://livejs.com https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/;
         style-src 'self' https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/
           'sha256-iRtqXVmOMp/hyF5UngK6PellD3q+F7toTW0WZBpaIyk='
           'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU';
-        img-src 'self' data:;
+        img-src 'self' data: https://avatars.githubusercontent.com/u/;
         object-src 'none';
         base-uri 'none'">
     <link type="application/atom+xml" rel="alternate" href="../atom.xml" title="blog by cofx - Tag - ClojureScript">
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-core.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <script defer src="../assets/tiny-utterances.js"></script>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/themes/prism.min.css">
     <link rel="stylesheet" href="../prism-theme.css">
+    <link rel="stylesheet" href="../tiny-utterances.css">
     <link rel="stylesheet" href="../style.css">
 
         <link rel="apple-touch-icon" sizes="180x180" href="../assets/favicon/apple-touch-icon.png">
@@ -78,5 +81,6 @@
 </div>
 
     </div>
+    
   </body>
 </html>
