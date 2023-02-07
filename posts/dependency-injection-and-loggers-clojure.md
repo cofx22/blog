@@ -54,7 +54,7 @@ These two log entries contain the log level ("INFO"), the namespace from which t
 
 Usually, it's convenient to be able to trace an entry in the logs to its origin in the code.
 In this example, however, we're logging messages in the namespace `domain`, but the log entries contain the namespace `logging`.
-This unfortunate, but it makes perfect sense.
+This is unfortunate, but it makes perfect sense.
 It may look like we're logging messages in the namespace `domain`, because that's where we call the `info` method of the logger,
 but the actual logging happens in the namespace `logging`, where `log/info` is called.
 
