@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Tiny Utterances: a minimalistic comment system</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google-site-verification" content="mk6IbhC-HpwMcak2aPoSmSXuSeSZTPedoNa9kRldGa8">
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+        connect-src 'self' https://api.github.com/repos/cofx22/blog/issues/;
+        media-src 'self' https://ljpengelen.github.io/groovid19/;
+        script-src 'self' https://livejs.com https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/;
+        style-src 'self' https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/
+          'sha256-iRtqXVmOMp/hyF5UngK6PellD3q+F7toTW0WZBpaIyk='
+          'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU';
+        img-src 'self' data: https://avatars.githubusercontent.com/u/;
+        object-src 'none';
+        base-uri 'none'">
+    <link type="application/atom+xml" rel="alternate" href="atom.xml" title="Tiny Utterances: a minimalistic comment system">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <script defer src="assets/tiny-utterances.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/themes/prism.min.css">
+    <link rel="stylesheet" href="prism-theme.css">
+    <link rel="stylesheet" href="tiny-utterances.css">
+    <link rel="stylesheet" href="style.css">
+
+        <link rel="apple-touch-icon" sizes="180x180" href="assets/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon/favicon-16x16.png">
+    <link rel="icon" type="image/x-icon" href="assets/favicon/favicon.ico" />
+    <link rel="manifest" href="assets/favicon/site.webmanifest">
+    <link rel="mask-icon" href="assets/favicon/safari-pinned-tab.svg" color="#2aa0a2">
+    <meta name="msapplication-TileColor" content="#2aa0a2">
+    <meta name="theme-color" content="#2aa0a2">
+
+
+    <meta name="title" content="Tiny Utterances: a minimalistic comment system">
+    <meta name="twitter:title" content="Tiny Utterances: a minimalistic comment system">
+    <meta property="og:title" content="Tiny Utterances: a minimalistic comment system">
+    <meta property="og:type" content="website">
+    
+    
+      <meta name="twitter:url" content="https://blog.cofx.nl/tiny-utterances.html">
+      <meta property="og:url" content="https://blog.cofx.nl/tiny-utterances.html">
+    
+    
+      <meta name="twitter:card" content="summary">
+    
+    
+    
+  </head>
+  <body>
+    <div class="header">
+      <a href="https://cofx.nl"><img src="/assets/cofx-logo-vierkant.svg" alt="cofx logo"/></a>
+      <div class="header-right">
+        <h1 class="site-title">
+          <a class="page-link" href="/">blog by cofx</a>
+        </h1>
+        <div class="site-nav">
+          <a class="page-link" href="archive.html">Archive</a>
+          <a class="page-link" href="tags/index.html">Tags</a>
+          <a class="page-link" href="atom.xml">Feed</a>
+        </div>
+      </div>
+    </div>
+    <div class="wrapper">
+      <h1>
+  
+  Tiny Utterances: a minimalistic comment system
+  
+</h1>
+<p>Are you looking for a free, serverless™ comment system for a technical blog? Maybe <a href='https://cofx22.github.io/tiny-utterances/'>Tiny Utterances</a> is the tool you need. All you need to get started is a GitHub issue and a few lines of CSS and JavaScript.</p><!-- end-of-preview --><h2>Conception</h2><p>Tiny Utterances started out as Tiny Giscus, a clone of <a href='https://giscus.app/'>Giscus</a>. Giscus is a comment system based on <a href='https://docs.github.com/en/discussions'>GitHub Discussions</a>. Utterances, on the other hand, is based on <a href='https://docs.github.com/en/issues/tracking-your-work-with-issues'>GitHub Issues</a>.</p><p>I started working on a minimalistic clone of Giscus that was based on GitHub Discussions too, simply because comments feel more closely related to discussions than issues. However, there's only a GraphQL API to interact with Github Discussions and this API requires a personal access token for all operations. As a result, you can't really use this API client side. Although it's technically possible, it requires you to expose one of your personal access tokens. That's also technically possible, because you could create a personal access token that can only be used to read public repositories and discussion, but GitHub immediately revokes any personal access token it finds in a repository.</p><p>Long story short, I had to switch to GitHub Issues as a basis for my minimalistic comment system. Although it's not a perfect fit conceptually, it works pretty well.</p><p>For additional details, such as installation instructions, visit the <a href='https://cofx22.github.io/tiny-utterances/'>documentation</a>. An example comment section is included at the bottom of this page and other pages of this blog. Feel free to leave a comment, that's why it's there.</p>
+
+<p>
+  <i>Published: 2023-03-28</i>
+  
+</p>
+
+<p>
+  <i>
+  Tagged:
+  
+  <span class="tag">
+    <a href="tags/Blogging.html">Blogging</a>
+  </span>
+  
+  </i>
+</p>
+
+
+    </div>
+    
+      <div class="comments">
+        <h2>Comments</h2>
+        <div class="tiny-utterances"
+          data-repo-owner="cofx22"
+          data-repo-name="blog"
+          data-issue-number="6"
+          data-max-comments="10">
+          <a class="tu-button" href="https://github.com/cofx22/blog/issues/6">Discuss this post on Github</a>
+        </div>
+      </div>
+    
+  </body>
+</html>

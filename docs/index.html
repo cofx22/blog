@@ -74,6 +74,15 @@
       <div class="post-previews">
     
         <div class="post-preview">
+            <h1><a href="tiny-utterances.html">Tiny Utterances: a minimalistic comment system</a></h1>
+            <p>Are you looking for a free, serverless™ comment system for a technical blog? Maybe <a href='https://cofx22.github.io/tiny-utterances/'>Tiny Utterances</a> is the tool you need. All you need to get started is a GitHub issue and a few lines of CSS and JavaScript.</p>
+            
+                <p><a href="tiny-utterances.html">Continue reading</a></p>
+            
+            
+        </div>
+    
+        <div class="post-preview">
             <h1><a href="dependency-injection-and-loggers-clojure.html">Dependency injection and loggers in Clojure</a></h1>
             <p>Logging functions have to be impure to be useful. If they don't change the state of the world around them by writing something somewhere, why would you use them? This makes any function that uses a logging function directly impure too. If that is something you want to avoid, you could inject a logging service and use that instead of the logging function. Let's do that and see what challenges we come across.</p>
             
@@ -93,15 +102,6 @@
 </code></pre><p>The function <code>domain/update-gift!</code> persists the changes to the database. It has a side effect, which makes it an impure function. Because <code>update-gift</code> uses <code>domain/update-gift!</code>, it's impure too.</p><p>You could argue that this fact alone is a reason to refactor this code. Generally speaking, pure functions are easier to test and easier to reason about, which are both good reasons to prefer pure functions over impure ones.</p>
             
                 <p><a href="dependency-injection-and-protocols-in-clojure.html">Continue reading</a></p>
-            
-            
-        </div>
-    
-        <div class="post-preview">
-            <h1><a href="shadow-cljs-tests.html">shadow-cljs and running tests</a></h1>
-            <p>When I used to work on front ends based on JavaScript or TypeScript, I usually had <a href='https://karma-runner.github.io/latest/index.html'>Karma</a> running in watch mode while developing. Each time I saved a file, all (unit) tests would run. This would give me a short feedback loop, letting me know quickly when I was unintentionally breaking things and constantly indicating whether what I was creating matched its specifications as defined by the tests. In other words, tests were used to prevent regressions, but also as a tool to quickly see whether I was building the right things.</p><p>In the last few years, I've been using Clojure and ClojureScript to create prototypes and utilities at work as well as hobby projects and apps for personal use. Because of the size and nature of these applications, I wasn't too worried about regressions. Because Clojure and ClojureScript have excellent support for REPL-driven development, the need for tests as a means for quick feedback also disappeared. As a result, I wrote a few tests for these applications, but not nearly as many as I used to.</p><p>Deep down inside, however, I knew I would have to invest some time into learning more about testing Clojure and ClojureScript applications at some point. I wouldn't want to work in a team that produced software without decent test coverage. I should hold myself to the same standard. This week, I decided to sit down and take some time to look into different ways to execute tests for ClojureScript apps powered by <a href='https://github.com/thheller/shadow-cljs'>shadow-cljs</a>. As you may know, shadow-cljs is one of the two de facto standard tools for creating ClojureScript apps. The other is <a href='https://figwheel.org/'>Figwheel</a>.</p>
-            
-                <p><a href="shadow-cljs-tests.html">Continue reading</a></p>
             
             
         </div>
