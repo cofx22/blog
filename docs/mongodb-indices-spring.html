@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Experimenting with MongoDB index creation and Spring Boot</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google-site-verification" content="mk6IbhC-HpwMcak2aPoSmSXuSeSZTPedoNa9kRldGa8">
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+        connect-src 'self' https://api.github.com/repos/cofx22/blog/issues/;
+        media-src 'self' https://ljpengelen.github.io/groovid19/;
+        script-src 'self' https://livejs.com https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/;
+        style-src 'self' https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/
+          'sha256-iRtqXVmOMp/hyF5UngK6PellD3q+F7toTW0WZBpaIyk='
+          'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU';
+        img-src 'self' data: https://avatars.githubusercontent.com/u/;
+        object-src 'none';
+        base-uri 'none'">
+    <link type="application/atom+xml" rel="alternate" href="atom.xml" title="Experimenting with MongoDB index creation and Spring Boot">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <script defer src="assets/tiny-utterances.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/themes/prism.min.css">
+    <link rel="stylesheet" href="prism-theme.css">
+    <link rel="stylesheet" href="tiny-utterances.css">
+    <link rel="stylesheet" href="style.css">
+
+        <link rel="apple-touch-icon" sizes="180x180" href="assets/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon/favicon-16x16.png">
+    <link rel="icon" type="image/x-icon" href="assets/favicon/favicon.ico" />
+    <link rel="manifest" href="assets/favicon/site.webmanifest">
+    <link rel="mask-icon" href="assets/favicon/safari-pinned-tab.svg" color="#2aa0a2">
+    <meta name="msapplication-TileColor" content="#2aa0a2">
+    <meta name="theme-color" content="#2aa0a2">
+
+
+    <meta name="title" content="Experimenting with MongoDB index creation and Spring Boot">
+    <meta name="twitter:title" content="Experimenting with MongoDB index creation and Spring Boot">
+    <meta property="og:title" content="Experimenting with MongoDB index creation and Spring Boot">
+    <meta property="og:type" content="website">
+    
+    
+      <meta name="twitter:url" content="https://blog.cofx.nl/mongodb-indices-spring.html">
+      <meta property="og:url" content="https://blog.cofx.nl/mongodb-indices-spring.html">
+    
+    
+      <meta name="twitter:card" content="summary">
+    
+    
+    
+  </head>
+  <body>
+    <div class="header">
+      <a href="https://cofx.nl"><img src="/assets/cofx-logo-vierkant.svg" alt="cofx logo"/></a>
+      <div class="header-right">
+        <h1 class="site-title">
+          <a class="page-link" href="/">blog by cofx</a>
+        </h1>
+        <div class="site-nav">
+          <a class="page-link" href="archive.html">Archive</a>
+          <a class="page-link" href="tags/index.html">Tags</a>
+          <a class="page-link" href="atom.xml">Feed</a>
+        </div>
+      </div>
+    </div>
+    <div class="wrapper">
+      <h1>
+  
+  Experimenting with MongoDB index creation and Spring Boot
+  
+</h1>
+<p>Creating indexes for MongoDB collections with Spring Boot is easy. You annotate your entities with the correct annotations, you set <code>spring.data.mongodb.auto-index-creation</code> to <code>true</code> in your configuration file, and you're done. Indexes will be created when you start your application.</p><p>Over time, however, people will start using your application, and your MongoDB collections will grow as a result. Creating an index for an empty collections takes very little time. Creating an index for a big collection can take a while. Because of this, configuring Spring to handle index creation on startup can lead to unpleasant surprises. The startup of your application will block until the new index is created, and this can take a while for existing, large collections.</p><p>Additionally, your application will not start at all if something goes wrong while creating an index. This could happen if you try to modify an existing index, for example.</p><p>All in all, it's worthwhile to take a closer look at various ways to programmatically create, find, and delete indexes.</p><!-- end-of-preview --><h2>Experimenting</h2><p>I've created a small Spring Boot application accompanied by a set of tests to experiment with index creation: <a href="https://github.com/ljpengelen/mongo-index-experiments">https://github.com/ljpengelen/mongo-index-experiments</a>. The application itself is not much more than a single document <code>RandomData</code> and a repository for this document. The class <code>RandomData</code> looks like this:</p><pre><code class="lang-java">@Builder
+@CompoundIndex&#40;def = &quot;{ randomString: 1, randomLong: 1 }&quot;, name = &quot;idx0&quot;&#41;
+@Data
+@Document
+public class RandomData {
+
+    @Indexed
+    private String randomString;
+
+    @Indexed
+    private long randomLong;
+
+    private boolean randomBoolean;
+}
+</code></pre><p>The app is configured to create indexes on startup, so once you start it, four indexes are generated: one compound index corresponding to the <code>@CompoundIndex</code> annotation, two single-field indexes corresponding to the <code>@Indexed</code> annotations, and one for the implicit ID. On my machine, the app starts in about 2 seconds. Part of the startup time is spent creating indexes, but this is almost negligible.</p><p>Now, let's insert some random data by executing the following test a few times:</p><pre><code class="lang-java">@Test
+void savesEntities&#40;&#41; {
+    var batchSize = 100;
+    var totalNumberOfEntities = 1&#95;000&#95;000;
+    IntStream.range&#40;0, totalNumberOfEntities / batchSize&#41;.forEach&#40;batchNumber -&gt; {
+        var entities = Stream.generate&#40;ExperimentApplicationTest::randomData&#41;
+                .limit&#40;batchSize&#41;
+                .toList&#40;&#41;;
+        repository.saveAll&#40;entities&#41;;
+
+        if &#40;batchNumber % 500 == 0&#41; {
+            log.info&#40;&quot;Inserting batch number {}&quot;, batchNumber&#41;;
+        }
+    }&#41;;
+}
+</code></pre><p>After inserting 3 million documents and removing the previously created indexes, the app takes around 14 seconds to start on my machine. Clearly, the time it takes to create indexes is no longer negligible.</p><p>Now that I've told you the same thing twice, it's time for some new information.</p><p>One way of creating indexes programmatically uses Spring's Mongo template:</p><pre><code class="lang-java">@Test
+void createsIndexViaTemplate&#40;&#41; {
+    var indexOps = mongoTemplate.indexOps&#40;COLLECTION&#95;NAME&#41;;
+
+    log.info&#40;&quot;Creating index&quot;&#41;;
+
+    var indexDefinition = new Index&#40;&#41;;
+    indexDefinition.named&#40;INDEX&#95;NAME&#41;
+            .on&#40;&quot;randomBoolean&quot;, Sort.Direction.ASC&#41;
+            .on&#40;&quot;randomString&quot;, Sort.Direction.ASC&#41;
+            .on&#40;&quot;randomLong&quot;, Sort.Direction.ASC&#41;;
+
+    var stopWatch = new StopWatch&#40;&#41;;
+    stopWatch.start&#40;&#41;;
+    indexOps.ensureIndex&#40;indexDefinition&#41;;
+    stopWatch.stop&#40;&#41;;
+    log.info&#40;&quot;Time to create index: {}&quot;, stopWatch.getTotalTimeMillis&#40;&#41;&#41;;
+}
+</code></pre><p>On my machine, creating this index takes around 4 seconds.</p><p>With MongoDB versions before 4.2, indices could be created in the foreground or the background. Foreground builds would be faster and would lead to more efficient index data structures, but would block access to the database during the build. Background builds would not block access to the database, but would take longer to build and be less efficient.</p><p>Starting from version 4.2, access is no longer blocked while the index is built. However, access is blocked at the start and end of the build process.</p><p>Even though access to the database is not blocked during index creation, the statement <code>indexOps.ensureIndex&#40;indexDefinition&#41;</code> does block, just like the application startup blocks during index creation.</p><p>One way of ensuring that your application is not blocked during index creation is by explicitly starting a new thread for this:</p><pre><code class="lang-java">@Test
+void createsIndexViaTemplateInBackground&#40;&#41; throws InterruptedException, ExecutionException {
+    var indexOps = mongoTemplate.indexOps&#40;COLLECTION&#95;NAME&#41;;
+
+    var completableFuture = new CompletableFuture&lt;Void&gt;&#40;&#41;;
+    var thread = new Thread&#40;&#40;&#41; -&gt; {
+        log.info&#40;&quot;Creating index&quot;&#41;;
+
+        var indexDefinition = new Index&#40;&#41;;
+        indexDefinition.named&#40;INDEX&#95;NAME&#41;
+                .on&#40;&quot;randomBoolean&quot;, Sort.Direction.ASC&#41;
+                .on&#40;&quot;randomString&quot;, Sort.Direction.ASC&#41;
+                .on&#40;&quot;randomLong&quot;, Sort.Direction.ASC&#41;;
+
+        var stopWatch = new StopWatch&#40;&#41;;
+        stopWatch.start&#40;&#41;;
+        indexOps.ensureIndex&#40;indexDefinition&#41;;
+        stopWatch.stop&#40;&#41;;
+        log.info&#40;&quot;Time to create index: {}&quot;, stopWatch.getTotalTimeMillis&#40;&#41;&#41;;
+
+        completableFuture.complete&#40;null&#41;;
+    }&#41;;
+
+    thread.start&#40;&#41;;
+
+    completableFuture.get&#40;&#41;;
+}
+</code></pre><p>Alternatively, you could use Spring's reactive Mongo template:</p><pre><code class="lang-java">@Test
+void createsIndexReactively&#40;&#41; throws InterruptedException, ExecutionException {
+    var indexOps = reactiveMongoTemplate.indexOps&#40;COLLECTION&#95;NAME&#41;;
+
+    log.info&#40;&quot;Creating index&quot;&#41;;
+
+    var indexDefinition = new Index&#40;&#41;;
+    indexDefinition.named&#40;INDEX&#95;NAME&#41;
+            .on&#40;&quot;randomBoolean&quot;, Sort.Direction.ASC&#41;
+            .on&#40;&quot;randomString&quot;, Sort.Direction.ASC&#41;
+            .on&#40;&quot;randomLong&quot;, Sort.Direction.ASC&#41;;
+
+    var completableFuture = new CompletableFuture&lt;Void&gt;&#40;&#41;;
+    var stopWatch = new StopWatch&#40;&#41;;
+    stopWatch.start&#40;&#41;;
+    indexOps.ensureIndex&#40;indexDefinition&#41;.subscribe&#40;name -&gt; {
+        stopWatch.stop&#40;&#41;;
+        log.info&#40;&quot;Time to create index {}: {}&quot;, name, stopWatch.getTotalTimeMillis&#40;&#41;&#41;;
+
+        completableFuture.complete&#40;null&#41;;
+    }&#41;;
+
+    completableFuture.get&#40;&#41;;
+}
+</code></pre><p>If you're looking for a way to create indexes that is not Spring-specific, you could also use the Mongo client for Java:</p><pre><code class="lang-java">@Test
+void createsIndexViaClient&#40;&#41; {
+    var keys = new BsonDocument&#40;&#41;;
+    keys.put&#40;&quot;randomLong&quot;, new BsonInt32&#40;1&#41;&#41;;
+    keys.put&#40;&quot;randomString&quot;, new BsonInt32&#40;1&#41;&#41;;
+    keys.put&#40;&quot;randomBoolean&quot;, new BsonInt32&#40;1&#41;&#41;;
+
+    var indexOptions = new IndexOptions&#40;&#41;;
+    indexOptions.name&#40;INDEX&#95;NAME&#41;;
+
+    var stopWatch = new StopWatch&#40;&#41;;
+    stopWatch.start&#40;&#41;;
+    log.info&#40;&quot;Creating index&quot;&#41;;
+    mongoClient.getDatabase&#40;DATABASE&#95;NAME&#41;.getCollection&#40;COLLECTION&#95;NAME&#41;.createIndex&#40;keys, indexOptions&#41;;
+    stopWatch.stop&#40;&#41;;
+    log.info&#40;&quot;Time to create index: {}&quot;, stopWatch.getTotalTimeMillis&#40;&#41;&#41;;
+}
+</code></pre><p>The statement <code>mongoClient.getDatabase&#40;...&#41;.getCollection&#40;...&#41;.createIndex&#40;keys, indexOptions&#41;</code> is again a blocking statement. As you might expect, all four ways take the same amount of time to create this particular index. The hard work is done by MongoDB, not our application or any library we're using.</p><h2>What's in a name?</h2><p>Some of the methods above are named <code>ensureIndex</code>, and some are named <code>createIndex</code>. In practice, they all behave as you would expect a method named <code>ensureIndex</code> to behave. They create an index if it doesn't exist yet, and they'll just do nothing if the index is already present. In other words, the following test passes and the last <code>indexOps.ensureIndex&#40;indexDefinition&#41;</code> only takes a few milliseconds:</p><pre><code class="lang-java">@Test
+void canEnsureExistingIndexViaTemplate&#40;&#41; {
+    var indexOps = mongoTemplate.indexOps&#40;COLLECTION&#95;NAME&#41;;
+
+    var indexDefinition = new Index&#40;&#41;;
+    indexDefinition.named&#40;INDEX&#95;NAME&#41;
+            .on&#40;&quot;randomBoolean&quot;, Sort.Direction.ASC&#41;
+            .on&#40;&quot;randomString&quot;, Sort.Direction.ASC&#41;
+            .on&#40;&quot;randomLong&quot;, Sort.Direction.ASC&#41;;
+
+    log.info&#40;&quot;Ensuring index&quot;&#41;;
+    indexOps.ensureIndex&#40;indexDefinition&#41;;
+    log.info&#40;&quot;Ensured index&quot;&#41;;
+    indexOps.ensureIndex&#40;indexDefinition&#41;;
+    log.info&#40;&quot;Ensured index again&quot;&#41;;
+}
+</code></pre><h2>No updates</h2><p>MongoDB does not allow you to update existing indices. If you have a non-unique index with a given name and you want a unique index with that same name, for example, you have to delete the existing index and create a new one to replace it. After deleting the existing index, performance may suffer until the replacement index is built.</p><p>Alternatively, you can introduce the replacement index with a new name. It's perfectly fine to have two indexes for the same fields as long as they have different names and one is unique and the other isn't, or one is sparse and the other isn't, etc.</p><h2>Automating index creation</h2><p>A basic way of creating indexes at the start of your application, without blocking, is as follows:</p><pre><code class="lang-java">@Component
+@Slf4j
+public class RandomDataIndexCreator {
+
+    private static final String COLLECTION&#95;NAME = &quot;randomData&quot;;
+    private static final String DATABASE&#95;NAME = &quot;test&quot;;
+ 
+    private final MongoIndexOperations mongoIndexOperations;
+
+    public RandomDataIndexCreator&#40;MongoClient mongoClient&#41; {
+        mongoIndexOperations = new MongoIndexOperations&#40;DATABASE&#95;NAME, COLLECTION&#95;NAME, mongoClient&#41;;
+    }
+
+    @PostConstruct
+    public void startIndexCreation&#40;&#41; {
+        var indexSpecification = MongoIndexSpecification.builder&#40;&#41;
+            .definition&#40;&quot;{ randomBoolean: 1, randomLong: 1 }&quot;&#41;
+            .build&#40;&#41;;
+        new Thread&#40;&#40;&#41; -&gt; mongoIndexOperations.createIndex&#40;indexSpecification&#41;&#41;.start&#40;&#41;;
+    }
+}
+</code></pre><p>The class <code>MongoIndexOperations</code> is a wrapper around <code>MongoClient</code>, but you could use <code>MongoTemplate</code> or <code>ReactiveMongoTemplate</code> too. I used <code>MongoClient</code> because it's Spring independent, which would make it possible to use <code>MongoIndexOperations</code> in non-Spring applications too. See <a href="https://github.com/ljpengelen/mongo-index-experiments/blob/main/src/main/java/nl/cofx/mongo/indices/experiment/operations/MongoIndexOperations.java">https://github.com/ljpengelen/mongo-index-experiments/blob/main/src/main/java/nl/cofx/mongo/indices/experiment/operations/MongoIndexOperations.java</a> for the complete implementation.</p><p>It could happen that some of the indexes you need are already present on some deployment environments, for example because someone created them manually. If you know the names of these indexes, you can just issue create statements like the one above. If the index already exists, nothing will happen, as discussed above. If it doesn't exist, it will be created.</p><p>If the naming is not consistent across deployment environments, things are a little trickier. In such cases, you first have to determine whether a given index exists, regardless of the name, and only create it when it doesn't exist.</p><pre><code class="lang-java">@PostConstruct
+public void startIndexCreation&#40;&#41; {
+    var indexSpecification = MongoIndexSpecification.builder&#40;&#41;
+        .definition&#40;&quot;{ randomBoolean: 1, randomLong: 1 }&quot;&#41;
+        .build&#40;&#41;;
+    new Thread&#40;&#40;&#41; -&gt; {
+        if &#40;mongoIndexOperations.findIndex&#40;indexSpecification&#41; == null&#41; {
+            mongoIndexOperations.createIndex&#40;indexSpecification.toBuilder&#40;&#41;
+                .name&#40;&quot;name-that-does-not-exist-in-any-deployment-environment&quot;&#41;
+                .build&#40;&#41;&#41;;
+        }
+    }&#41;.start&#40;&#41;;
+}
+</code></pre><p>Ideally, you'd use some migration framework that ensures that each index is only created once, instead of creating it (or at least verifying its existence) each time your app starts. For SQL databases, <a href='https://flywaydb.org/'>Flyway</a> provides such functionality. I have no experience with any open-source counterpart for MongoDB.</p><h2>Conclusion</h2><p>If you have a few minutes to spare, I advise you to clone <a href="https://github.com/ljpengelen/mongo-index-experiments">https://github.com/ljpengelen/mongo-index-experiments</a> and do some experiments yourself. The proof of the pudding is in the eating.</p>
+
+<p>
+  <i>Published: 2023-03-29</i>
+  
+</p>
+
+<p>
+  <i>
+  Tagged:
+  
+  <span class="tag">
+    <a href="tags/Spring.html">Spring</a>
+  </span>
+  
+  <span class="tag">
+    <a href="tags/Java.html">Java</a>
+  </span>
+  
+  <span class="tag">
+    <a href="tags/MongoDB.html">MongoDB</a>
+  </span>
+  
+  </i>
+</p>
+
+
+    </div>
+    
+      <div class="comments">
+        <h2>Comments</h2>
+        <div class="tiny-utterances"
+          data-repo-owner="cofx22"
+          data-repo-name="blog"
+          data-issue-number="7"
+          data-max-comments="10">
+          <a class="tu-button" href="https://github.com/cofx22/blog/issues/7">Discuss this post on Github</a>
+        </div>
+      </div>
+    
+  </body>
+</html>

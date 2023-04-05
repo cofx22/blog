@@ -71,6 +71,7 @@ a {
   color:rgb(51, 65, 85);
   font-weight: bold;
   transition: color 0.2s;
+  word-break: break-all;
 }
 
 a:hover {
@@ -102,7 +103,8 @@ ul.tags {
 }
 
 code {
-  white-space: pre;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 img {

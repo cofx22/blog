@@ -74,6 +74,15 @@
       <div class="post-previews">
     
         <div class="post-preview">
+            <h1><a href="mongodb-indices-spring.html">Experimenting with MongoDB index creation and Spring Boot</a></h1>
+            <p>Creating indexes for MongoDB collections with Spring Boot is easy. You annotate your entities with the correct annotations, you set <code>spring.data.mongodb.auto-index-creation</code> to <code>true</code> in your configuration file, and you're done. Indexes will be created when you start your application.</p><p>Over time, however, people will start using your application, and your MongoDB collections will grow as a result. Creating an index for an empty collections takes very little time. Creating an index for a big collection can take a while. Because of this, configuring Spring to handle index creation on startup can lead to unpleasant surprises. The startup of your application will block until the new index is created, and this can take a while for existing, large collections.</p><p>Additionally, your application will not start at all if something goes wrong while creating an index. This could happen if you try to modify an existing index, for example.</p><p>All in all, it's worthwhile to take a closer look at various ways to programmatically create, find, and delete indexes.</p>
+            
+                <p><a href="mongodb-indices-spring.html">Continue reading</a></p>
+            
+            
+        </div>
+    
+        <div class="post-preview">
             <h1><a href="tiny-utterances.html">Tiny Utterances: a minimalistic comment system</a></h1>
             <p>Are you looking for a free, serverless™ comment system for a technical blog? Maybe <a href='https://cofx22.github.io/tiny-utterances/'>Tiny Utterances</a> is the tool you need. All you need to get started is a GitHub issue and a few lines of CSS and JavaScript.</p>
             
@@ -87,21 +96,6 @@
             <p>Logging functions have to be impure to be useful. If they don't change the state of the world around them by writing something somewhere, why would you use them? This makes any function that uses a logging function directly impure too. If that is something you want to avoid, you could inject a logging service and use that instead of the logging function. Let's do that and see what challenges we come across.</p>
             
                 <p><a href="dependency-injection-and-loggers-clojure.html">Continue reading</a></p>
-            
-            
-        </div>
-    
-        <div class="post-preview">
-            <h1><a href="dependency-injection-and-protocols-in-clojure.html">Dependency injection and protocols in Clojure</a></h1>
-            <p>Consider the following function, which</p><ul><li>takes a map of dependencies and a ring request,</li><li>updates a gift using data from the request, and</li><li>returns a ring response:</li></ul><!-- force end of list --><pre><code class="lang-clojure">&#40;defn update-gift &#91;{:keys &#91;datasource&#93;} request&#93;
-  &#40;let &#91;{:keys &#91;external-list-id external-gift-id&#93;} &#40;:path-params request&#41;
-        {:keys &#91;name ok price description&#93;} &#40;:params request&#41;&#93;
-    &#40;when ok
-      &#40;domain/update-gift! datasource external-gift-id name price description&#41;&#41;
-    &#40;response/redirect &#40;str &quot;/list/&quot; external-list-id &quot;/edit&quot;&#41; :see-other&#41;&#41;&#41;
-</code></pre><p>The function <code>domain/update-gift!</code> persists the changes to the database. It has a side effect, which makes it an impure function. Because <code>update-gift</code> uses <code>domain/update-gift!</code>, it's impure too.</p><p>You could argue that this fact alone is a reason to refactor this code. Generally speaking, pure functions are easier to test and easier to reason about, which are both good reasons to prefer pure functions over impure ones.</p>
-            
-                <p><a href="dependency-injection-and-protocols-in-clojure.html">Continue reading</a></p>
             
             
         </div>
