@@ -71,7 +71,6 @@ a {
   color:rgb(51, 65, 85);
   font-weight: bold;
   transition: color 0.2s;
-  word-break: break-all;
 }
 
 a:hover {
