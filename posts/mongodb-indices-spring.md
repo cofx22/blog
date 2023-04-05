@@ -45,7 +45,9 @@ public class RandomData {
 ```
 
 The app is configured to create indexes on startup, so once you start it, four indexes are generated:
-one compound index corresponding to the `@CompoundIndex` annotation, two corresponding to the `@Indexed` annotations, and one for the implicit ID.
+one compound index corresponding to the `@CompoundIndex` annotation,
+two single-field indexes corresponding to the `@Indexed` annotations,
+and one for the implicit ID.
 On my machine, the app starts in about 2 seconds.
 Part of the startup time is spent creating indexes, but this is almost negligible.
 
@@ -198,14 +200,14 @@ void createsIndexViaClient() {
 }
 ```
 
-The statement `mongoClient.getDatabase(DATABASE_NAME).getCollection(COLLECTION_NAME).createIndex(keys, indexOptions)` is again a blocking statement.
+The statement `mongoClient.getDatabase(...).getCollection(...).createIndex(keys, indexOptions)` is again a blocking statement.
 As you might expect, all four ways take the same amount of time to create this particular index.
 The hard work is done by MongoDB, not our application or any library we're using.
 
 ## What's in a name?
 
-Some of the methods above are named `ensureIndex` some are named `createIndex`.
-In practice, they all behave as you would expect a method `ensureIndex` to behave.
+Some of the methods above are named `ensureIndex`, and some are named `createIndex`.
+In practice, they all behave as you would expect a method named `ensureIndex` to behave.
 They create an index if it doesn't exist yet, and they'll just do nothing if the index is already present.
 In other words, the following test passes and the last `indexOps.ensureIndex(indexDefinition)` only takes a few milliseconds:
 
@@ -234,8 +236,78 @@ MongoDB does not allow you to update existing indices.
 If you have a non-unique index with a given name and you want a unique index with that same name,
 for example,
 you have to delete the existing index and create a new one to replace it.
-While the replacement index is being created, performance may suffer.
+After deleting the existing index, performance may suffer until the replacement index is built.
 
 Alternatively, you can introduce the replacement index with a new name.
 It's perfectly fine to have two indexes for the same fields as long as they have different names and one is unique and the other isn't,
 or one is sparse and the other isn't, etc.
+
+## Automating index creation
+
+A basic way of creating indexes at the start of your application, without blocking, is as follows:
+
+```java
+@Component
+@Slf4j
+public class RandomDataIndexCreator {
+
+    private static final String COLLECTION_NAME = "randomData";
+    private static final String DATABASE_NAME = "test";
+ 
+    private final MongoIndexOperations mongoIndexOperations;
+
+    public RandomDataIndexCreator(MongoClient mongoClient) {
+        mongoIndexOperations = new MongoIndexOperations(DATABASE_NAME, COLLECTION_NAME, mongoClient);
+    }
+
+    @PostConstruct
+    public void startIndexCreation() {
+        var indexSpecification = MongoIndexSpecification.builder()
+            .definition("{ randomBoolean: 1, randomLong: 1 }")
+            .build();
+        new Thread(() -> mongoIndexOperations.createIndex(indexSpecification)).start();
+    }
+}
+```
+
+The class `MongoIndexOperations` is a wrapper around `MongoClient`, but you could use `MongoTemplate` or `ReactiveMongoTemplate` too.
+I used `MongoClient` because it's Spring independent, which would make it possible to use `MongoIndexOperations` in non-Spring applications too.
+See <https://github.com/ljpengelen/mongo-index-experiments/blob/main/src/main/java/nl/cofx/mongo/indices/experiment/operations/MongoIndexOperations.java> for the complete implementation.
+
+It could happen that some of the indexes you need are already present on some deployment environments,
+for example because someone created them manually.
+If you know the names of these indexes,
+you can just issue create statements like the one above.
+If the index already exists, nothing will happen, as discussed above.
+If it doesn't exist, it will be created.
+
+If the naming is not consistent across deployment environments,
+things are a little trickier.
+In such cases, you first have to determine whether a given index exists, regardless of the name, and only create it when it doesn't exist.
+
+```java
+@PostConstruct
+public void startIndexCreation() {
+    var indexSpecification = MongoIndexSpecification.builder()
+        .definition("{ randomBoolean: 1, randomLong: 1 }")
+        .build();
+    new Thread(() -> {
+        if (mongoIndexOperations.findIndex(indexSpecification) == null) {
+            mongoIndexOperations.createIndex(indexSpecification.toBuilder()
+                .name("name-that-does-not-exist-in-any-deployment-environment")
+                .build());
+        }
+    }).start();
+}
+```
+
+Ideally, you'd use some migration framework that ensures that each index is only created once,
+instead of creating it (or at least verifying its existence) each time your app starts.
+For SQL databases, [Flyway](https://flywaydb.org/) provides such functionality.
+I have no experience with any open-source counterpart for MongoDB.
+
+## Conclusion
+
+If you have a few minutes to spare,
+I advise you to clone <https://github.com/ljpengelen/mongo-index-experiments> and do some experiments yourself.
+The proof of the pudding is in the eating.
