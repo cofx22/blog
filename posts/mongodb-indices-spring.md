@@ -272,7 +272,7 @@ public class RandomDataIndexCreator {
 
 The class `MongoIndexOperations` is a wrapper around `MongoClient`, but you could use `MongoTemplate` or `ReactiveMongoTemplate` too.
 I used `MongoClient` because it's Spring independent, which would make it possible to use `MongoIndexOperations` in non-Spring applications too.
-See <https://github.com/ljpengelen/mongo-index-experiments/blob/main/src/main/java/nl/cofx/mongo/indices/experiment/operations/MongoIndexOperations.java> for the complete implementation.
+See [MongoIndexOperations.java](https://github.com/ljpengelen/mongo-index-experiments/blob/main/src/main/java/nl/cofx/mongo/indices/experiment/operations/MongoIndexOperations.java) for the complete implementation.
 
 It could happen that some of the indexes you need are already present on some deployment environments,
 for example because someone created them manually.
