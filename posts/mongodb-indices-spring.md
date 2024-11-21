@@ -1,6 +1,8 @@
 Title: Experimenting with MongoDB index creation and Spring Boot
 Date: 2023-03-29
 Tags: Java, Spring, MongoDB
+Image: assets/social/cofx-java.png
+Image-Alt: An image indicating that this post is about Java
 Issue: 7
 
 Creating indexes for MongoDB collections with Spring Boot is easy.
