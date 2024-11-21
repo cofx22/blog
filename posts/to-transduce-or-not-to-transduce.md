@@ -61,7 +61,7 @@ Since all but the first number are never used again, this space is wasted.
 We'll come back to this example below.
 
 Because of these downsides (and more), some say that [lazy evaluation should be avoided as much as possible](https://clojure-goes-fast.com/blog/clojures-deadly-sin/).
-One way of doing that would be to [default to using transducers](https://dawranliou.com/blog/default-transducers/).
+One way of avoiding lazy evaluation as much as possible would be to [default to using transducers](https://dawranliou.com/blog/default-transducers/).
 
 ## A first look at transducers
 
@@ -142,7 +142,7 @@ The following examples illustrate this.
 Because transducers are simply functions that transform reducing functions into reducing functions, they can be composed with `comp`,
 as we've seen in one of the examples above.
 
-The fact that transducer do not care at all which reducing function they're wrapping is exactly the reason why they were added to the language.
+The fact that a transducer do not care at all which reducing function they're wrapping is exactly the reason why they were added to the language.
 Whereas the traditional implementations of functions like `map` and `filter` operate on collections and return collections,
 transducers are much more widely applicable.
 They can be used to implement a variety of processes that take input one value at a time, perform some operation on each of these values,
@@ -285,9 +285,173 @@ Another difference is that the array list stored as state is converted to a vect
 After some benchmarking, I found out that this is slightly faster than `(vec a)` for small lists.
 I don't see why this only holds for small lists, but I don't want to invest time in finding out right now.
 
+After each update of the array list containing strings, in `strings-to-the-back`, you'll see `(vreset! stringsv strings)`.
+This may seem unnecessary, since `strings` is always the same object.
+This expression does have an effect, however.
+The Java memory model guarantees that when a thread reads a volatile variable,
+it sees not just the latest change to the volatile,
+[but also the side effects of the code that led up to the change](https://docs.oracle.com/javase/tutorial/essential/concurrency/atomic.html).
 
+## Volatile fields and visibility of related changes
+
+There is a set of stress tests called the Java Concurrency Stress tests ([jcstress](https://openjdk.org/projects/code-tools/jcstress/))
+that can be used to find concurrency-related bugs in implementations of the JVM, among other things.
+
+Running the following stress test shows that the JVM behaves exactly as documented.
+The observer will either see a `null` list or one that contains the number 42,
+because the assignment to the volatile field happens after the number 42 is added to the temporary list.
+
+```java
+@JCStressTest
+@State
+@Outcome.Outcomes({
+        @Outcome(id = "-1", expect = ACCEPTABLE, desc = "Null list"),
+        @Outcome(id = "0", expect = FORBIDDEN, desc = "Empty list"),
+        @Outcome(id = "42", expect = ACCEPTABLE, desc = "List containing 42"),
+})
+public class VolatileSaveAfterModification {
+
+    volatile List<Integer> list;
+
+    @Actor
+    public void actor() {
+        var tmpList = new ArrayList<Integer>();
+        tmpList.add(42);
+        list = tmpList;
+    }
+
+    @Actor
+    public void observer(I_Result r) {
+        var l = list;
+        if (l != null) {
+            if (l.isEmpty()) {
+                r.r1 = 0;
+            } else {
+                r.r1 = l.get(0);
+            }
+        } else {
+            r.r1 = -1;
+        }
+    }
+}
+```
+
+The test report is as follows:
+
+```shell-session
+  RESULT     SAMPLES     FREQ      EXPECT  DESCRIPTION
+      -1  24.230.598   78,97%  Acceptable  Null list
+       0           0    0,00%   Forbidden  Empty list
+      42   6.454.586   21,03%  Acceptable  List containing 42
+```
+
+The result of running the following test is very different:
+
+```java
+@JCStressTest
+@State
+@Outcome.Outcomes({
+        @Outcome(id = "-1", expect = ACCEPTABLE, desc = "Null list"),
+        @Outcome(id = "-2", expect = ACCEPTABLE_INTERESTING, desc = "Non-empty list without item"),
+        @Outcome(id = "0", expect = ACCEPTABLE_INTERESTING, desc = "Empty list"),
+        @Outcome(id = "42", expect = ACCEPTABLE, desc = "List containing 42"),
+})
+public class VolatileSaveBeforeModification {
+
+    volatile List<Integer> list;
+
+    @Actor
+    public void actor() {
+        list = new ArrayList<>();
+        list.add(42);
+    }
+
+    @Actor
+    public void observer(I_Result r) {
+        var l = list;
+        if (l != null) {
+            if (l.isEmpty()) {
+                r.r1 = 0;
+            } else {
+                try {
+                    var value = l.get(0);
+                    r.r1 = value != null ? value : -1;
+                } catch (Exception e) {
+                    r.r1 = -2;
+                }
+            }
+        } else {
+            r.r1 = -1;
+        }
+    }
+}
+```
+
+The test report is as follows:
+
+```shell-session
+  RESULT     SAMPLES     FREQ       EXPECT  DESCRIPTION
+      -1  30.773.768   88,04%   Acceptable  Null list
+      -2          49   <0,01%  Interesting  Non-empty list without item
+       0      62.466    0,18%  Interesting  Empty list
+      42   4.118.981   11,78%   Acceptable  List containing 42
+```
+
+The observer still sees a `null` list or one containing 42 most of the time,
+but it also happens that it sees an empty list or one that is not empty but does not have a first item.
+
+## Applying transducers in different contexts
+
+As mentioned above, part of the beauty of transducers is that they can be reused in different, unrelated contexts.
+In the examples below,
+we use the same transducer to modify a vector of values and to transform all values communicated over a [core/async](https://github.com/clojure/core.async) channel.
+
+```clojure
+(into [] strings-to-the-back [1 "2" 3]) ;; Evaluates to [1 3 "2"]
+
+(let [c (chan 3 strings-to-the-back)]
+  (>!! c 1)
+  (>!! c "2")
+  (>!! c 3)
+  (close! c)
+  (-> []
+      (conj (<!! c))
+      (conj (<!! c))
+      (conj (<!! c)))) ;; Evaluates to [1 3 "2"]
+```
 
 ## Delayed evaluation
+
+When discussing some of the downsides of lazy seqs, we encountered the following example:
+
+```clojure
+(let [r (range 3e7)]
+    [(last r) (first r)])
+```
+
+Due to the caching of already computed values, evaluating this expression takes a large amount of memory.
+In situations where you need delayed eager evaluation and no caching, eduction can come in handy.
+The eduction function takes zero or more transducers and a collection, and returns something that can be reduced or iterated over.
+
+I see an eduction as something that is not yet a reduction.
+It can become a reduction after reducing it.
+
+Values are computed eagerly, one at a time, and only when reducing or iterating over an eduction.
+Computed values are not cached and thus have to be recomputed each time an eduction is reduced or iterated over again.
+
+The following example uses an eduction to prevent the memory issues of the previous example.
+In this example, the eduction function is used without any transducers.
+
+```clojure
+(let [r (eduction (range 3e7))]
+    [(last r) (first r)])
+```
+
+The image below, produced with [jconsole](https://openjdk.org/tools/svc/jconsole/),
+shows that the memory used while evaluating the second expression is much lower.
+
+
+![Comparing memory use](assets/to-transduce-or-not-to-transduce/eduction-memory-use.png)
 
 ## Conclusion
 
