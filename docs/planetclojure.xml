@@ -3,18 +3,225 @@
   <title>blog by cofx</title>
   <link href="https://blog.cofx.nl/atom.xml" rel="self"/>
   <link href="https://blog.cofx.nl"/>
-  <updated>2023-02-04T09:25:00+00:00</updated>
+  <updated>2024-11-21T14:11:18+00:00</updated>
   <id>https://blog.cofx.nl</id>
   <author>
     <name>cofx</name>
   </author>
   <entry>
+    <id>https://blog.cofx.nl/to-transduce-or-not-to-transduce.html</id>
+    <link href="https://blog.cofx.nl/to-transduce-or-not-to-transduce.html"/>
+    <title>To transduce or not to transduce?</title>
+    <updated>2024-11-20T23:59:59+00:00</updated>
+    <content type="html"><![CDATA[<p>Transducers are to Clojure what monads are to Haskell: an almost endless source of inspiration for blog posts and discussions. I've heard and read about transducer in the past, but never got around to taking a real close look for myself. Now that I did take a closer look, I also learned some interesting things about Java's <code>volatile</code> keyword, the Java memory model, and the Java Concurrency Stress tests.</p><!-- end-of-preview --><h2>Lazy seqs</h2><p>Before we look into transducers, let's talk about lazy seqs first. Consider the following expression:</p><pre><code class="lang-clojure">&#40;-&gt;&gt; &#40;range&#41;
+     &#40;filter even?&#41;
+     &#40;drop 5&#41;
+     &#40;take 5&#41;&#41;
+</code></pre><p>This expression can be read as follows:</p><ul><li>start with the (infinite) seq of all natural numbers,</li><li>keep only the even numbers,</li><li>drop the first five, and</li><li>take the following five.</li></ul><p>The end result of the expression is a lazy seq containing the numbers 10, 12, 14, 16, and 18. Lazy evaluation is part of the foundation of Clojure. Without lazy evaluation, evaluating expressions like the one above would be impossible. You cannot eagerly construct the set of all natural numbers, because that would take an infinite amount of time and storage space.</p><p>Although lazy evaluation is what makes expressions like the one above possible, it also has its downsides. One downside is that each step in the transformation pipeline above leads to an intermediate lazy seq. They are created when calculating the end result and then immediately discarded.</p><p>Once the value of a certain element of a lazy seq has been calculated, this value is cached. When working with large lazy seqs while keeping a reference to the final result (either deliberately or by accident), memory use can be significant.</p><p>Consider the following expression, for example:</p><pre><code class="lang-clojure">&#40;let &#91;r &#40;range 3e7&#41;&#93;
+    &#91;&#40;last r&#41; &#40;first r&#41;&#93;&#41;
+</code></pre><p>This expression takes the numbers 0 to 30 million minus one and returns a vector containing the last and first of those numbers. After evaluating <code>&#40;last r&#41;</code>, all of these numbers are cached in memory, which takes a large amount of space. Since all but the first number are never used again, this space is wasted. We'll come back to this example below.</p><p>Because of these downsides (and more), some say that <a href='https://clojure-goes-fast.com/blog/clojures-deadly-sin/'>lazy evaluation should be avoided as much as possible</a>. One way of avoiding lazy evaluation as much as possible would be to <a href='https://dawranliou.com/blog/default-transducers/'>default to using transducers</a>.</p><h2>A first look at transducers</h2><p>The following example shows an alternative expression for calculating the 6th to 10th even number:</p><pre><code class="lang-clojure">&#40;into &#91;&#93;
+      &#40;comp
+       &#40;filter even?&#41;
+       &#40;drop 5&#41;
+       &#40;take 5&#41;&#41;
+      &#40;range&#41;&#41;
+</code></pre><p>This example uses a transducer, constructed by composing three other transducers, and returns a vector containing the numbers 10, 12, 14, 16, and 18. This end result is computed eagerly, and no intermediate lazy seqs are created.</p><p>Although there are some syntactical similarities between this expression and the one at the start of this post, something completely different is going on. Both this example and the one at the start of this post contain the expressions <code>&#40;filter even?&#41;</code>, <code>&#40;drop 5&#41;</code>, and <code>&#40;take 5&#41;</code>. However, after macro expansion, these syntactical similarities are gone:</p><pre><code class="lang-clojure">&#40;clojure.core/take 5
+    &#40;clojure.core/drop 5
+        &#40;clojure.core/filter clojure.core/even? &#40;clojure.core/range&#41;&#41;&#41;&#41;
+</code></pre><p>Once the threading macro <code>-&gt;&gt;</code> is out of the picture, it is clear that the functions <code>filter</code>, <code>drop</code>, and <code>take</code> operate on seqs in the first example. In the example demonstrating transducers, <code>&#40;filter even?&#41;</code>, <code>&#40;drop 5&#41;</code>, and <code>&#40;take 5&#41;</code> each return a transducer.</p><p>It is not hard to imagine what <code>&#40;filter even? &#91;1 2 3&#93;&#41;</code> returns. Imagining what <code>&#40;filter even?&#41;</code> could return and how that could be put to good use is a bit more difficult.</p><h2>Transducers in terms of reducing functions</h2><p>A reducing function is a function that takes an intermediate result and a new input, and returns a new result. For example, <code>+</code> is a reducing function that takes an intermediate sum and a new number and returns a new sum. The function <code>conj</code> is also a reducing function, which takes an intermediate collection and a new value and returns a new collection that includes the new value. Generally speaking, reducing functions are used to construct a single value from a number of values, one step at a time. They're used to <em>reduce</em> multiple values into a single value.</p><p>Depending on how they're supposed to be used, some reducing functions in Clojure also have to support taking no arguments. For example, because <code>&#40;+&#41;</code> evaluates to 0, <code>&#40;reduce + &#91;&#93;&#41;</code> can be evaluated too, and will evaluate to 0.</p><p><a href='https://clojure.org/reference/transducers'>Clojure's documentation</a> describes transducers as a transformation from one reducing function into another. For that statement to be 100% correct, an additional requirement for reducing functions is needed. Apart from accepting no arguments or two arguments, they should also accept a single argument.</p><p>Consider the following function, which is a slimmed down variant of Clojure's <code>filter</code> function that takes a predicate and returns a transducer:</p><pre><code class="lang-clojure">&#40;defn filter &#91;pred&#93;
+  &#40;fn &#91;rf&#93;
+    &#40;fn
+      &#40;&#91;&#93; &#40;rf&#41;&#41;
+      &#40;&#91;result&#93; &#40;rf result&#41;&#41;
+      &#40;&#91;result input&#93;
+        &#40;if &#40;pred input&#41;
+          &#40;rf result input&#41;
+          result&#41;&#41;&#41;&#41;&#41;
+</code></pre><p>You'll notice that the transducer returned by <code>filter</code> is a function that takes a reducing function <code>rf</code> and returns a function that takes either 0, 1, or 2 arguments. You'll also notice that the reducing function <code>rf</code> itself is called with 0, 1, or 2 arguments. The most important thing to note, however, is that this transducer will work as expected, regardless of what function is provided as reducing function. The following examples illustrate this.</p><pre><code class="lang-clojure">&#40;reduce &#40;&#40;filter even?&#41; +&#41; 0 &#91;1 2 3 4 5 6&#93;&#41; ;; evaluates to 12
+&#40;reduce &#40;&#40;filter even?&#41; str&#41; &quot;&quot; &#91;1 2 3 4 5 6&#93;&#41; ;; evaluates to &quot;246&quot;
+&#40;reduce &#40;&#40;filter even?&#41; &#42;&#41; 1 &#91;1 2 3 4 5 6&#93;&#41; ;; evaluates to 48
+</code></pre><p><em>These examples are only provided to illustrate that any reducing function can be used in combination with a transducer.</em> <em>This is not how you'd use transducers in practice.</em></p><p>Because transducers are simply functions that transform reducing functions into reducing functions, they can be composed with <code>comp</code>, as we've seen in one of the examples above.</p><p>The fact that transducers do not care at all which reducing function they're wrapping is exactly the reason why they were added to the language. Whereas the traditional implementations of functions like <code>map</code> and <code>filter</code> operate on collections and return collections, transducers are much more widely applicable. They can be used to implement a variety of processes that take input one value at a time, perform some operation on each of these values, and combine the result somehow.</p><h2>Creating a stateful transducer</h2><p>The transducer returned by the function <code>filter</code> we looked at earlier was stateless. It processes input value by value, without maintaining any state concerning previous values. To get a feel for stateful transducers, I created <code>drop-nth</code>, the twin brother of <code>take-nth</code>.</p><pre><code class="lang-clojure">&#40;defn drop-nth &#91;n&#93;
+  &#40;fn &#91;rf&#93;
+    &#40;let &#91;nv &#40;volatile! -1&#41;&#93;
+      &#40;fn
+        &#40;&#91;&#93; &#40;rf&#41;&#41;
+        &#40;&#91;result&#93; &#40;rf result&#41;&#41;
+        &#40;&#91;result input&#93;
+         &#40;let &#91;i &#40;vswap! nv inc&#41;&#93;
+           &#40;if &#40;zero? &#40;rem i n&#41;&#41;
+             result
+             &#40;rf result input&#41;&#41;&#41;&#41;&#41;&#41;&#41;&#41;
+</code></pre><p>The function <code>drop-nth</code> takes a number <code>n</code> and returns a transducer that leaves out every <code>nth</code> value it receives as input from the output. If this transducer is called without arguments, there's nothing for it to do, so it calls the reducing function without arguments. If this transducer is called with a single argument, there's also nothing for it to do, so it calls the reducing function with the single argument. If the transducer is called with two arguments, it checks its local state to see whether or not the new input value should be included in the result. This is where it gets interesting.</p><p>The contract for transducers says that a transducer may be invoked by different threads, but not at the same time. A given transducer could be used to process some values on one thread for some time and then later to process some other values on another thread. Each of these threads should see the current value of <code>nv</code>, the local state of the transducer. This is where <code>volatile</code> and <code>vswap!</code> come into play.</p><p>Usually, atoms are used to share state between threads in Clojure. However, to keep transducers as performant as possible, volatiles where introduced for state kept by transducers. The JVM will ensure that the value of a volatile field is always read from main memory and not from the cache maintained by a thread. A volatile does not provide the atomicity guarantees that an atom provides, but that is acceptable given the contract for transducers mentioned above.</p><h2>Volatile</h2><p>The following Java application demonstrates the effect of the volatile keyword:</p><pre><code class="lang-java">public class VolatileDemo {
+
+    private static volatile boolean STOP&#95;RUNNING&#95;VOLATILE;
+    private static boolean STOP&#95;RUNNING&#95;NON&#95;VOLATILE;
+
+    public static void main&#40;String&#91;&#93; args&#41; throws InterruptedException {
+        try &#40;var executorService = Executors.newCachedThreadPool&#40;&#41;&#41; {
+            executorService.submit&#40;&#40;&#41; -&gt; {
+                var count = 0;
+                while &#40;!STOP&#95;RUNNING&#95;VOLATILE&#41; {
+                    count++;
+                }
+
+                System.out.println&#40;&quot;Runnable checking volatile field terminated: &quot; + count&#41;;
+            }&#41;;
+            executorService.submit&#40;&#40;&#41; -&gt; {
+                var count = 0;
+                while &#40;!STOP&#95;RUNNING&#95;NON&#95;VOLATILE&#41; {
+                    count++;
+                }
+
+                System.out.println&#40;&quot;Runnable checking non-volatile field terminated: &quot; + count&#41;;
+            }&#41;;
+            Thread.sleep&#40;10&#41;;
+            STOP&#95;RUNNING&#95;VOLATILE = true;
+            STOP&#95;RUNNING&#95;NON&#95;VOLATILE = true;
+        }
+    }
+}
+</code></pre><p>The first runnable submitted to the executor service will stop increasing the counter as soon as the value of <code>STOP&#95;RUNNING&#95;VOLATILE</code> is changed to <code>true</code>. The second runnable will keep on increasing its counter because it's reading a cached value of <code>STOP&#95;RUNNING&#95;NON&#95;VOLATILE</code>.</p><h2>Another stateful transducer</h2><p>The transducer <code>drop-nth</code> had nothing to do once the end of its input was reached, but the following transducer does:</p><pre><code class="lang-clojure">&#40;defn strings-to-the-back &#91;rf&#93;
+  &#40;let &#91;stringsv &#40;volatile! &#40;java.util.ArrayList.&#41;&#41;&#93;
+    &#40;fn
+      &#40;&#91;&#93; &#40;rf&#41;&#41;
+      &#40;&#91;result&#93;
+       &#40;let &#91;&#94;java.util.ArrayList strings @stringsv
+             result &#40;if &#40;.isEmpty strings&#41;
+                      result
+                      &#40;let &#91;v &#40;vec strings&#41;&#93;
+                        &#40;.clear strings&#41;
+                        &#40;vreset! stringsv strings&#41;
+                        &#40;unreduced &#40;reduce rf result v&#41;&#41;&#41;&#41;&#93;
+         &#40;rf result&#41;&#41;&#41;
+      &#40;&#91;result input&#93;
+       &#40;let &#91;&#94;java.util.ArrayList strings @stringsv&#93;
+         &#40;if &#40;string? input&#41;
+           &#40;do
+             &#40;.add strings input&#41;
+             &#40;vreset! stringsv strings&#41;
+             result&#41;
+           &#40;rf result input&#41;&#41;&#41;&#41;&#41;&#41;&#41;
+</code></pre><p>This transducer inspects the values it receives as input and will not immediately add them to the output if they are strings. One the end of the input is reached, all strings are added to the output.</p><p>This transducer is inspired by <code>partition-all</code>, which looks like this at the time of writing:</p><pre><code class="lang-clojure">&#40;defn partition-all &#91;&#94;long n&#93;
+  &#40;fn &#91;rf&#93;
+    &#40;let &#91;a &#40;java.util.ArrayList. n&#41;&#93;
+      &#40;fn
+        &#40;&#91;&#93; &#40;rf&#41;&#41;
+        &#40;&#91;result&#93;
+         &#40;let &#91;result &#40;if &#40;.isEmpty a&#41;
+                        result
+                        &#40;let &#91;v &#40;vec &#40;.toArray a&#41;&#41;&#93;
+                          ;;clear first!
+                          &#40;.clear a&#41;
+                          &#40;unreduced &#40;rf result v&#41;&#41;&#41;&#41;&#93;
+           &#40;rf result&#41;&#41;&#41;
+        &#40;&#91;result input&#93;
+         &#40;.add a input&#41;
+         &#40;if &#40;= n &#40;.size a&#41;&#41;
+           &#40;let &#91;v &#40;vec &#40;.toArray a&#41;&#41;&#93;
+             &#40;.clear a&#41;
+             &#40;rf result v&#41;&#41;
+           result&#41;&#41;&#41;&#41;&#41;&#41;
+</code></pre><p>The most notable difference between <code>strings-to-the-back</code> and <code>partition-all</code> is that the latter does not make use of a volatile. This is, however, a bug: <a href='https://clojure.atlassian.net/browse/CLJ-2146'>https://clojure.atlassian.net/browse/CLJ-2146</a>. Another difference is that the array list stored as state is converted to a vector as follows: <code>&#40;vec &#40;.toArray a&#41;&#41;</code>. After some benchmarking, I found out that this is slightly faster than <code>&#40;vec a&#41;</code> for small lists. I don't see why this only holds for small lists, but I don't want to invest time in finding out right now.</p><p>After each update of the array list containing strings in <code>strings-to-the-back</code>, you'll see <code>&#40;vreset! stringsv strings&#41;</code>. This may seem unnecessary, since <code>strings</code> is always the same object. This expression does have an effect, however. The Java memory model guarantees that when a thread reads a volatile variable, it sees not just the latest change to the volatile, <a href='https://docs.oracle.com/javase/tutorial/essential/concurrency/atomic.html'>but also the side effects of the code that led up to the change</a>.</p><h2>Volatile fields and visibility of related changes</h2><p>There is a set of stress tests called the Java Concurrency Stress tests (<a href='https://openjdk.org/projects/code-tools/jcstress/'>jcstress</a>) that can be used to find concurrency-related bugs in implementations of the JVM, among other things.</p><p>Running the following stress test shows that the JVM behaves exactly as documented. The observer will either see a <code>null</code> list or one that contains the number 42, because the assignment to the volatile field happens after the number 42 is added to the temporary list.</p><pre><code class="lang-java">@JCStressTest
+@State
+@Outcome.Outcomes&#40;{
+        @Outcome&#40;id = &quot;-1&quot;, expect = ACCEPTABLE, desc = &quot;Null list&quot;&#41;,
+        @Outcome&#40;id = &quot;0&quot;, expect = FORBIDDEN, desc = &quot;Empty list&quot;&#41;,
+        @Outcome&#40;id = &quot;42&quot;, expect = ACCEPTABLE, desc = &quot;List containing 42&quot;&#41;,
+}&#41;
+public class VolatileSaveAfterModification {
+
+    volatile List&lt;Integer&gt; list;
+
+    @Actor
+    public void actor&#40;&#41; {
+        var tmpList = new ArrayList&lt;Integer&gt;&#40;&#41;;
+        tmpList.add&#40;42&#41;;
+        list = tmpList;
+    }
+
+    @Actor
+    public void observer&#40;I&#95;Result r&#41; {
+        var l = list;
+        if &#40;l != null&#41; {
+            if &#40;l.isEmpty&#40;&#41;&#41; {
+                r.r1 = 0;
+            } else {
+                r.r1 = l.get&#40;0&#41;;
+            }
+        } else {
+            r.r1 = -1;
+        }
+    }
+}
+</code></pre><p>The test report is as follows:</p><pre><code class="lang-shell-session">  RESULT     SAMPLES     FREQ      EXPECT  DESCRIPTION
+      -1  24.230.598   78,97%  Acceptable  Null list
+       0           0    0,00%   Forbidden  Empty list
+      42   6.454.586   21,03%  Acceptable  List containing 42
+</code></pre><p>The result of running the following test is very different:</p><pre><code class="lang-java">@JCStressTest
+@State
+@Outcome.Outcomes&#40;{
+        @Outcome&#40;id = &quot;-1&quot;, expect = ACCEPTABLE, desc = &quot;Null list&quot;&#41;,
+        @Outcome&#40;id = &quot;-2&quot;, expect = ACCEPTABLE&#95;INTERESTING, desc = &quot;Non-empty list without item&quot;&#41;,
+        @Outcome&#40;id = &quot;0&quot;, expect = ACCEPTABLE&#95;INTERESTING, desc = &quot;Empty list&quot;&#41;,
+        @Outcome&#40;id = &quot;42&quot;, expect = ACCEPTABLE, desc = &quot;List containing 42&quot;&#41;,
+}&#41;
+public class VolatileSaveBeforeModification {
+
+    volatile List&lt;Integer&gt; list;
+
+    @Actor
+    public void actor&#40;&#41; {
+        list = new ArrayList&lt;&gt;&#40;&#41;;
+        list.add&#40;42&#41;;
+    }
+
+    @Actor
+    public void observer&#40;I&#95;Result r&#41; {
+        var l = list;
+        if &#40;l != null&#41; {
+            if &#40;l.isEmpty&#40;&#41;&#41; {
+                r.r1 = 0;
+            } else {
+                try {
+                    var value = l.get&#40;0&#41;;
+                    r.r1 = value != null ? value : -1;
+                } catch &#40;Exception e&#41; {
+                    r.r1 = -2;
+                }
+            }
+        } else {
+            r.r1 = -1;
+        }
+    }
+}
+</code></pre><p>The test report is as follows:</p><pre><code class="lang-shell-session">  RESULT     SAMPLES     FREQ       EXPECT  DESCRIPTION
+      -1  30.773.768   88,04%   Acceptable  Null list
+      -2          49   &lt;0,01%  Interesting  Non-empty list without item
+       0      62.466    0,18%  Interesting  Empty list
+      42   4.118.981   11,78%   Acceptable  List containing 42
+</code></pre><p>The observer still sees a <code>null</code> list or one containing 42 most of the time, but it also happens that it sees an empty list or one that is not empty but does not have a first item.</p><h2>Applying transducers in different contexts</h2><p>As mentioned above, part of the beauty of transducers is that they can be reused in different, unrelated contexts. In the examples below, we use the same transducer to modify a vector of values as well as to transform all values communicated over a <a href='https://github.com/clojure/core.async'>core/async</a> channel.</p><pre><code class="lang-clojure">&#40;into &#91;&#93; strings-to-the-back &#91;1 &quot;2&quot; 3&#93;&#41; ;; Evaluates to &#91;1 3 &quot;2&quot;&#93;
+
+&#40;let &#91;c &#40;chan 3 strings-to-the-back&#41;&#93;
+  &#40;&gt;!! c 1&#41;
+  &#40;&gt;!! c &quot;2&quot;&#41;
+  &#40;&gt;!! c 3&#41;
+  &#40;close! c&#41;
+  &#40;-&gt; &#91;&#93;
+      &#40;conj &#40;&lt;!! c&#41;&#41;
+      &#40;conj &#40;&lt;!! c&#41;&#41;
+      &#40;conj &#40;&lt;!! c&#41;&#41;&#41;&#41; ;; Evaluates to &#91;1 3 &quot;2&quot;&#93;
+</code></pre><h2>Delayed evaluation</h2><p>When discussing some of the downsides of lazy seqs, we encountered the following example:</p><pre><code class="lang-clojure">&#40;let &#91;r &#40;range 3e7&#41;&#93;
+    &#91;&#40;last r&#41; &#40;first r&#41;&#93;&#41;
+</code></pre><p>Due to the caching of already computed values, evaluating this expression takes a large amount of memory. In situations where you need delayed eager evaluation and no caching, eduction can come in handy. The eduction function takes zero or more transducers and a collection, and returns something that can be reduced or iterated over.</p><p>I see an eduction as something that is not yet a reduction. It can become a reduction after reducing it.</p><p>Values are computed eagerly, one at a time, and only when reducing or iterating over an eduction. Computed values are not cached and thus have to be recomputed each time an eduction is reduced or iterated over again.</p><p>The following example uses an eduction to prevent the memory issues of the previous example. In this example, the eduction function is used without any transducers.</p><pre><code class="lang-clojure">&#40;let &#91;r &#40;eduction &#40;range 3e7&#41;&#41;&#93;
+    &#91;&#40;last r&#41; &#40;first r&#41;&#93;&#41;
+</code></pre><p>The image below, produced with <a href='https://openjdk.org/tools/svc/jconsole/'>jconsole</a>, shows that the memory used while evaluating the second expression is much lower.</p><p><img src="assets/to-transduce-or-not-to-transduce/eduction-memory-use.png" alt="Comparing memory use" /></p><h2>Conclusion</h2><p>First of all, let's answer the question in the title of this post. Should we transduce or should we not? Of course, we should. Transducers are really interesting conceptually, they're performant, and they're reusable. Should they be used every time, everywhere? I'm not convinced about that. I don't think laziness should be avoided at all costs or that transducer-based solutions are always superior to solutions using lazy seqs.</p><p>Visit <a href='https://github.com/ljpengelen/transduce-shakespeare/'>https://github.com/ljpengelen/transduce-shakespeare/</a> to try this at home.</p>]]></content>
+  </entry>
+  <entry>
     <id>https://blog.cofx.nl/dependency-injection-and-loggers-clojure.html</id>
     <link href="https://blog.cofx.nl/dependency-injection-and-loggers-clojure.html"/>
     <title>Dependency injection and loggers in Clojure</title>
     <updated>2023-02-04T23:59:59+00:00</updated>
-    <content type="html">
-      <![CDATA[<p>Logging functions have to be impure to be useful. If they don't change the state of the world around them by writing something somewhere, why would you use them? This makes any function that uses a logging function directly impure too. If that is something you want to avoid, you could inject a logging service and use that instead of the logging function. Let's do that and see what challenges we come across.</p><!-- end-of-preview --><p>The protocol <code>Logger</code> below consists of a single method <code>info</code>. The constructor function <code>create-logger</code> returns a concrete implementation of <code>Logger</code>, which delegates to <code>clojure.tools.logging/info</code>.</p><pre><code class="lang-clojure">&#40;ns logging
+    <content type="html"><![CDATA[<p>Logging functions have to be impure to be useful. If they don't change the state of the world around them by writing something somewhere, why would you use them? This makes any function that uses a logging function directly impure too. If that is something you want to avoid, you could inject a logging service and use that instead of the logging function. Let's do that and see what challenges we come across.</p><!-- end-of-preview --><p>The protocol <code>Logger</code> below consists of a single method <code>info</code>. The constructor function <code>create-logger</code> returns a concrete implementation of <code>Logger</code>, which delegates to <code>clojure.tools.logging/info</code>.</p><pre><code class="lang-clojure">&#40;ns logging
   &#40;:require &#91;clojure.tools.logging :as log&#93;&#41;&#41;
 
 &#40;defprotocol Logger
@@ -70,16 +277,14 @@
 &#40;add-and-log &#40;create-logger&#41; 1 2 3 4 5&#41;
 </code></pre><p>The result of evaluating the last two expressions is now as follows:</p><pre><code class="lang-shell-session">13:58:17.378 &#91;nREPL-session-fab93eaa-9ae3-40d4-a4f1-a0605747ba5c&#93; INFO  domain - 10
 13:58:18.589 &#91;nREPL-session-fab93eaa-9ae3-40d4-a4f1-a0605747ba5c&#93; INFO  domain - 15
-</code></pre><p>Only one word changed, but this can make a world of difference when looking through logs to track down bugs.</p>]]>
-    </content>
+</code></pre><p>Only one word changed, but this can make a world of difference when looking through logs to track down bugs.</p>]]></content>
   </entry>
   <entry>
     <id>https://blog.cofx.nl/dependency-injection-and-protocols-in-clojure.html</id>
     <link href="https://blog.cofx.nl/dependency-injection-and-protocols-in-clojure.html"/>
     <title>Dependency injection and protocols in Clojure</title>
     <updated>2023-01-29T23:59:59+00:00</updated>
-    <content type="html">
-      <![CDATA[<p>Consider the following function, which</p><ul><li>takes a map of dependencies and a ring request,</li><li>updates a gift using data from the request, and</li><li>returns a ring response:</li></ul><!-- force end of list --><pre><code class="lang-clojure">&#40;defn update-gift &#91;{:keys &#91;datasource&#93;} request&#93;
+    <content type="html"><![CDATA[<p>Consider the following function, which</p><ul><li>takes a map of dependencies and a ring request,</li><li>updates a gift using data from the request, and</li><li>returns a ring response:</li></ul><!-- force end of list --><pre><code class="lang-clojure">&#40;defn update-gift &#91;{:keys &#91;datasource&#93;} request&#93;
   &#40;let &#91;{:keys &#91;external-list-id external-gift-id&#93;} &#40;:path-params request&#41;
         {:keys &#91;name ok price description&#93;} &#40;:params request&#41;&#93;
     &#40;when ok
@@ -109,16 +314,14 @@
     &#40;when ok
       &#40;domain/update-gift! gift-service datasource external-gift-id name price description&#41;&#41;
     &#40;response/redirect &#40;str &quot;/list/&quot; external-list-id &quot;/edit&quot;&#41; :see-other&#41;&#41;&#41;
-</code></pre><p>This function is pure, like the previous version, which makes it easier to reason about and test. Because we're injecting a service and applying a method from a protocol to it, there's more information to work with for static analysis tools. The image below shows how such a tool can show the argument list and documentation of the protocol method <code>domain/update-gift!</code>.</p><p><img src="assets/dependency-injection-and-protocols/static-analysis.png" alt="Static analysis" /></p><p>Whether or not this final version is better than the first version depends a lot on the size of the app it is part of, the plans for this app, the team working on the app, etc. The point of this post is not to convince you that you should apply dependency injection where you can or that you should always use protocols when you do apply it. The point of this post is to show you that you can have your cake and eat it when it comes to dynamically typed languages and static analysis.</p>]]>
-    </content>
+</code></pre><p>This function is pure, like the previous version, which makes it easier to reason about and test. Because we're injecting a service and applying a method from a protocol to it, there's more information to work with for static analysis tools. The image below shows how such a tool can show the argument list and documentation of the protocol method <code>domain/update-gift!</code>.</p><p><img src="assets/dependency-injection-and-protocols/static-analysis.png" alt="Static analysis" /></p><p>Whether or not this final version is better than the first version depends a lot on the size of the app it is part of, the plans for this app, the team working on the app, etc. The point of this post is not to convince you that you should apply dependency injection where you can or that you should always use protocols when you do apply it. The point of this post is to show you that you can have your cake and eat it when it comes to dynamically typed languages and static analysis.</p>]]></content>
   </entry>
   <entry>
     <id>https://blog.cofx.nl/shadow-cljs-tests.html</id>
     <link href="https://blog.cofx.nl/shadow-cljs-tests.html"/>
     <title>shadow-cljs and running tests</title>
     <updated>2023-01-27T23:59:59+00:00</updated>
-    <content type="html">
-      <![CDATA[<p>When I used to work on front ends based on JavaScript or TypeScript, I usually had <a href='https://karma-runner.github.io/latest/index.html'>Karma</a> running in watch mode while developing. Each time I saved a file, all (unit) tests would run. This would give me a short feedback loop, letting me know quickly when I was unintentionally breaking things and constantly indicating whether what I was creating matched its specifications as defined by the tests. In other words, tests were used to prevent regressions, but also as a tool to quickly see whether I was building the right things.</p><p>In the last few years, I've been using Clojure and ClojureScript to create prototypes and utilities at work as well as hobby projects and apps for personal use. Because of the size and nature of these applications, I wasn't too worried about regressions. Because Clojure and ClojureScript have excellent support for REPL-driven development, the need for tests as a means for quick feedback also disappeared. As a result, I wrote a few tests for these applications, but not nearly as many as I used to.</p><p>Deep down inside, however, I knew I would have to invest some time into learning more about testing Clojure and ClojureScript applications at some point. I wouldn't want to work in a team that produced software without decent test coverage. I should hold myself to the same standard. This week, I decided to sit down and take some time to look into different ways to execute tests for ClojureScript apps powered by <a href='https://github.com/thheller/shadow-cljs'>shadow-cljs</a>. As you may know, shadow-cljs is one of the two de facto standard tools for creating ClojureScript apps. The other is <a href='https://figwheel.org/'>Figwheel</a>.</p><!-- end-of-preview --><p>There are a number of different ways to execute tests for a shadow-cljs based ClojureScript application. This blog post covers three of them and a number of variations. There are more alternatives, but I'll probably stick with a combination of the following for now.</p><h2>Running tests on the command line</h2><p>shadow-cljs supports a number of build targets for building and running tests. One of them if the <code>:node-test</code> target, which will gather all tests from namespaces that match a given regex and produces a build that includes these tests and a test runner for executing them.</p><p>The following configuration is the absolute minimum you need to get started. Additional configuration options are described in the <a href='https://shadow-cljs.github.io/docs/UsersGuide.html#target-node-test'>user guide for shadow-cljs</a>.</p><pre><code class="lang-clojure">...
+    <content type="html"><![CDATA[<p>When I used to work on front ends based on JavaScript or TypeScript, I usually had <a href='https://karma-runner.github.io/latest/index.html'>Karma</a> running in watch mode while developing. Each time I saved a file, all (unit) tests would run. This would give me a short feedback loop, letting me know quickly when I was unintentionally breaking things and constantly indicating whether what I was creating matched its specifications as defined by the tests. In other words, tests were used to prevent regressions, but also as a tool to quickly see whether I was building the right things.</p><p>In the last few years, I've been using Clojure and ClojureScript to create prototypes and utilities at work as well as hobby projects and apps for personal use. Because of the size and nature of these applications, I wasn't too worried about regressions. Because Clojure and ClojureScript have excellent support for REPL-driven development, the need for tests as a means for quick feedback also disappeared. As a result, I wrote a few tests for these applications, but not nearly as many as I used to.</p><p>Deep down inside, however, I knew I would have to invest some time into learning more about testing Clojure and ClojureScript applications at some point. I wouldn't want to work in a team that produced software without decent test coverage. I should hold myself to the same standard. This week, I decided to sit down and take some time to look into different ways to execute tests for ClojureScript apps powered by <a href='https://github.com/thheller/shadow-cljs'>shadow-cljs</a>. As you may know, shadow-cljs is one of the two de facto standard tools for creating ClojureScript apps. The other is <a href='https://figwheel.org/'>Figwheel</a>.</p><!-- end-of-preview --><p>There are a number of different ways to execute tests for a shadow-cljs based ClojureScript application. This blog post covers three of them and a number of variations. There are more alternatives, but I'll probably stick with a combination of the following for now.</p><h2>Running tests on the command line</h2><p>shadow-cljs supports a number of build targets for building and running tests. One of them if the <code>:node-test</code> target, which will gather all tests from namespaces that match a given regex and produces a build that includes these tests and a test runner for executing them.</p><p>The following configuration is the absolute minimum you need to get started. Additional configuration options are described in the <a href='https://shadow-cljs.github.io/docs/UsersGuide.html#target-node-test'>user guide for shadow-cljs</a>.</p><pre><code class="lang-clojure">...
 :builds {...
          :test {:target :node-test
                 :output-to &quot;out/node-tests.js&quot;}
@@ -166,7 +369,6 @@ Ran 1 tests containing 3 assertions.
 &#40;comment
   &#40;cljs.test/run-all-tests&#41;
   &#40;cljs.test/run-all-tests #&quot;rsi.&#42;-test&quot;&#41;&#41;
-</code></pre><p>The last line of the snippet above shows how you can restrict <code>run-all-tests</code> to the namespaces containing the tests for your app. Most likely, you're not interested in seeing the test results for all your dependencies.</p><p>Many editors that support Clojure offer functionality to trigger the evaluation of custom snippets of Clojure when a certain combination of keys is pressed. You could use that functionality to evaluate something like <code>&#40;cljs.test/run-all-tests #&quot;rsi.&#42;-test&quot;&#41;</code> each time you want to run your tests. Make sure to evaluate test definitions after you've changed them, however, before running the tests. Otherwise, <code>run-all-tests</code> will execute the previous version of your tests.</p><h2>Conclusion</h2><p>As mentioned above, I'm not sure which combination of these methods I'll use in the future. I'll definitely run tests on the command line for CI builds. I'll probably won't be running tests in the REPL very often. Evaluating changed test definitions before running tests requires additional key presses, and there's some extra work needed to keep <code>cljs/user.cljs</code> up to date.</p>]]>
-    </content>
+</code></pre><p>The last line of the snippet above shows how you can restrict <code>run-all-tests</code> to the namespaces containing the tests for your app. Most likely, you're not interested in seeing the test results for all your dependencies.</p><p>Many editors that support Clojure offer functionality to trigger the evaluation of custom snippets of Clojure when a certain combination of keys is pressed. You could use that functionality to evaluate something like <code>&#40;cljs.test/run-all-tests #&quot;rsi.&#42;-test&quot;&#41;</code> each time you want to run your tests. Make sure to evaluate test definitions after you've changed them, however, before running the tests. Otherwise, <code>run-all-tests</code> will execute the previous version of your tests.</p><h2>Conclusion</h2><p>As mentioned above, I'm not sure which combination of these methods I'll use in the future. I'll definitely run tests on the command line for CI builds. I'll probably won't be running tests in the REPL very often. Evaluating changed test definitions before running tests requires additional key presses, and there's some extra work needed to keep <code>cljs/user.cljs</code> up to date.</p>]]></content>
   </entry>
 </feed>
