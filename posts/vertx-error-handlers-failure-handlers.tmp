@@ -1,0 +1,9 @@
+Title: Error handlers and failure handlers in Vert.x
+Date: 2024-10-31
+Tags: Java, Vert.x
+Image: assets/social/cofx-java.png
+Image-Alt: An image indicating that this post is about Java
+
+[Vert.x](https://vertx.io/) is a toolkit for developing reactive applications on the JVM.
+I wrote a [short introductory post](reactive-java-with-vertx.html) about it earlier,
+when I used it for a commercial project.
