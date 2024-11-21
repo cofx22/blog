@@ -142,7 +142,7 @@ The following examples illustrate this.
 Because transducers are simply functions that transform reducing functions into reducing functions, they can be composed with `comp`,
 as we've seen in one of the examples above.
 
-The fact that a transducer do not care at all which reducing function they're wrapping is exactly the reason why they were added to the language.
+The fact that transducers do not care at all which reducing function they're wrapping is exactly the reason why they were added to the language.
 Whereas the traditional implementations of functions like `map` and `filter` operate on collections and return collections,
 transducers are much more widely applicable.
 They can be used to implement a variety of processes that take input one value at a time, perform some operation on each of these values,
@@ -172,7 +172,7 @@ The function `drop-nth` takes a number `n` and returns a transducer that leaves 
 If this transducer is called without arguments, there's nothing for it to do, so it calls the reducing function without arguments.
 If this transducer is called with a single argument, there's also nothing for it to do, so it calls the reducing function with the single argument.
 If the transducer is called with two arguments, it checks its local state to see whether or not the new input value should be included in the result.
-This is where it get's interesting.
+This is where it gets interesting.
 
 The contract for transducers says that a transducer may be invoked by different threads, but not at the same time.
 A given transducer could be used to process some values on one thread for some time and then later to process some other values on another thread.
@@ -285,7 +285,7 @@ Another difference is that the array list stored as state is converted to a vect
 After some benchmarking, I found out that this is slightly faster than `(vec a)` for small lists.
 I don't see why this only holds for small lists, but I don't want to invest time in finding out right now.
 
-After each update of the array list containing strings, in `strings-to-the-back`, you'll see `(vreset! stringsv strings)`.
+After each update of the array list containing strings in `strings-to-the-back`, you'll see `(vreset! stringsv strings)`.
 This may seem unnecessary, since `strings` is always the same object.
 This expression does have an effect, however.
 The Java memory model guarantees that when a thread reads a volatile variable,
@@ -404,7 +404,7 @@ but it also happens that it sees an empty list or one that is not empty but does
 
 As mentioned above, part of the beauty of transducers is that they can be reused in different, unrelated contexts.
 In the examples below,
-we use the same transducer to modify a vector of values and to transform all values communicated over a [core/async](https://github.com/clojure/core.async) channel.
+we use the same transducer to modify a vector of values as well as to transform all values communicated over a [core/async](https://github.com/clojure/core.async) channel.
 
 ```clojure
 (into [] strings-to-the-back [1 "2" 3]) ;; Evaluates to [1 3 "2"]
