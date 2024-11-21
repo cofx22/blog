@@ -1,6 +1,8 @@
 Title: To transduce or not to transduce?
 Date: 2024-11-20
 Tags: Clojure, Java
+Image: assets/social/cofx-clojure.png
+Image-Alt: An image indicating that this post is about Clojure
 Issue: 8
 
 Transducers are to Clojure what monads are to Haskell:
