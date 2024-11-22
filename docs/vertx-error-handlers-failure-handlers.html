@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Error handlers and failure handlers in Vert.x</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google-site-verification" content="mk6IbhC-HpwMcak2aPoSmSXuSeSZTPedoNa9kRldGa8">
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+        connect-src 'self' https://api.github.com/repos/cofx22/blog/issues/;
+        media-src 'self' https://ljpengelen.github.io/groovid19/;
+        script-src 'self' https://livejs.com https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/;
+        style-src 'self' https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/
+          'sha256-iRtqXVmOMp/hyF5UngK6PellD3q+F7toTW0WZBpaIyk='
+          'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU';
+        img-src 'self' data: https://avatars.githubusercontent.com/u/;
+        object-src 'none';
+        base-uri 'none'">
+    <link type="application/atom+xml" rel="alternate" href="atom.xml" title="Error handlers and failure handlers in Vert.x">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <script defer src="assets/tiny-utterances.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/themes/prism.min.css">
+    <link rel="stylesheet" href="prism-theme.css">
+    <link rel="stylesheet" href="tiny-utterances.css">
+    <link rel="stylesheet" href="style.css">
+
+        <link rel="apple-touch-icon" sizes="180x180" href="assets/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon/favicon-16x16.png">
+    <link rel="icon" type="image/x-icon" href="assets/favicon/favicon.ico" />
+    <link rel="manifest" href="assets/favicon/site.webmanifest">
+    <link rel="mask-icon" href="assets/favicon/safari-pinned-tab.svg" color="#2aa0a2">
+    <meta name="msapplication-TileColor" content="#2aa0a2">
+    <meta name="theme-color" content="#2aa0a2">
+
+
+    <meta name="title" content="Error handlers and failure handlers in Vert.x">
+    <meta name="twitter:title" content="Error handlers and failure handlers in Vert.x">
+    <meta property="og:title" content="Error handlers and failure handlers in Vert.x">
+    <meta property="og:type" content="website">
+    
+    
+      <meta name="twitter:url" content="https://blog.cofx.nl/vertx-error-handlers-failure-handlers.html">
+      <meta property="og:url" content="https://blog.cofx.nl/vertx-error-handlers-failure-handlers.html">
+    
+    
+      <meta name="twitter:image" content="https://blog.cofx.nl/assets/social/cofx-java.png">
+      <meta name="twitter:card" content="summary_large_image">
+      <meta property="og:image" content="https://blog.cofx.nl/assets/social/cofx-java.png">
+      <meta property="og:image:alt" content="An image indicating that this post is about Java">
+    
+    
+    
+  </head>
+  <body>
+    <div class="header">
+      <a href="https://cofx.nl"><img src="/assets/cofx-logo-vierkant.svg" alt="cofx logo"/></a>
+      <div class="header-right">
+        <h1 class="site-title">
+          <a class="page-link" href="/">blog by cofx</a>
+        </h1>
+        <div class="site-nav">
+          <a class="page-link" href="archive.html">Archive</a>
+          <a class="page-link" href="tags/index.html">Tags</a>
+          <a class="page-link" href="atom.xml">Feed</a>
+        </div>
+      </div>
+    </div>
+    <div class="wrapper">
+      <h1>
+  
+  Error handlers and failure handlers in Vert.x
+  
+</h1>
+<p><a href='https://vertx.io/'>Vert.x</a> is a toolkit for developing reactive applications on the JVM. I wrote a <a href='reactive-java-with-vertx.html'>short introductory post</a> about it earlier, when I used it for a commercial project. I had to revisit a Vert.x-based hobby project a few weeks ago, and I learned that there were some gaps in my knowledge about how Vert.x handles failures and errors. To fill those gaps, I did some experiments, wrote a few tests, and then wrote this blog post.</p><!-- end-of-preview --><p>The heart of most Vert.x-based web applications is a router. The router routes requests to zero or more requests handlers, based on the path of the requests. If all goes well, the handler that is handling a given request will issue a response. When something does go wrong, Vert.x offers failure handlers and error handlers to handle the situation.</p><h2>How to signal that something went wrong in a request handler?</h2><p>Errors in request handlers come in two flavors: either an exception is thrown (intentionally or unintentionally) or an error is signalled explicitly by calling the <code>fail</code> method on the routing context. If you want to signal something went wrong by calling this method, you have three options:</p><ul><li>you can supply a status code,</li><li>you can supply a status code and an exception, or</li><li>you can supply an exception.</li></ul><p>Throwing an exception has the same effect as calling the <code>fail</code> method with an exception as argument. If no status code is provided when calling <code>fail</code>, status code 500 is used. If an exception is provided when calling <code>fail</code>, this exception will be available to all failure and error handlers.</p><p>Without any error or failure handler, Vert.x will respond to a failed request with status code 500 and a body containing "Internal Server Error". If that response doesn't suit your needs, you'll need to register an error handler and/or one or more failure handlers.</p><h2>Error handlers</h2><p>You can register one error handler per status code with a router. If some failure happens while handling a request and there are no failure handlers (more about those below), then the error handler registered for the status code corresponding to the failure will handle the request:</p><pre><code class="lang-java">@Test
+void errorHandlerCanHandleException&#40;VertxTestContext vertxTestContext&#41; {
+    var handlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+    var errorHandlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+
+    router.route&#40;&quot;/&quot;&#41;
+            .handler&#40;rc -&gt; {
+                handlerExecuted.flag&#40;&#41;;
+                throw new RuntimeException&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
+            }&#41;;
+    router.errorHandler&#40;500, rc -&gt; {
+        errorHandlerExecuted.flag&#40;&#41;;
+        rc.response&#40;&#41;
+                .setStatusCode&#40;500&#41;
+                .end&#40;MESSAGE&#95;FROM&#95;ERROR&#95;HANDLER + &quot;: &quot; + rc.failure&#40;&#41;.getMessage&#40;&#41;&#41;;
+    }&#41;;
+
+    var response = performGetRequest&#40;&quot;/&quot;&#41;;
+
+    assertThat&#40;response.statusCode&#40;&#41;&#41;.isEqualTo&#40;500&#41;;
+    assertThat&#40;response.body&#40;&#41;&#41;.startsWith&#40;MESSAGE&#95;FROM&#95;ERROR&#95;HANDLER&#41;;
+    assertThat&#40;response.body&#40;&#41;&#41;.endsWith&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
+    vertxTestContext.succeedingThenComplete&#40;&#41;;
+}
+</code></pre><p>As discussed above, the error handler has access to the exception that led to the invocation of the error handler. In this example, the error handler for status code 500 handles the error because this is the default status code when no other status code is provided.</p><p>Vert.x supports splitting up a single (large) router into multiple smaller ones using sub routers. Although error handlers can be registered for each sub router, they will simply be ignored:</p><pre><code class="lang-java">@Test
+void errorHandlerForSubRouterIsIgnored&#40;Vertx vertx, VertxTestContext vertxTestContext&#41; {
+    var handlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+    var rootErrorHandlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+
+    var subRouter = Router.router&#40;vertx&#41;;
+    subRouter.errorHandler&#40;500, rc -&gt;
+            vertxTestContext.failNow&#40;&quot;Error handler for sub router should not be reached&quot;&#41;&#41;;
+    subRouter.route&#40;&quot;/route&quot;&#41;
+            .handler&#40;rc -&gt; {
+                handlerExecuted.flag&#40;&#41;;
+                throw new RuntimeException&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
+            }&#41;;
+
+    router.route&#40;&quot;/sub/&#42;&quot;&#41;
+            .subRouter&#40;subRouter&#41;;
+
+    router.errorHandler&#40;500, rc -&gt; {
+        rootErrorHandlerExecuted.flag&#40;&#41;;
+        rc.response&#40;&#41;
+                .setStatusCode&#40;500&#41;
+                .end&#40;MESSAGE&#95;FROM&#95;ERROR&#95;HANDLER + &quot;: &quot; + rc.failure&#40;&#41;.getMessage&#40;&#41;&#41;;
+    }&#41;;
+
+    var response = performGetRequest&#40;&quot;/sub/route&quot;&#41;;
+
+    assertThat&#40;response.statusCode&#40;&#41;&#41;.isEqualTo&#40;500&#41;;
+    assertThat&#40;response.body&#40;&#41;&#41;.startsWith&#40;MESSAGE&#95;FROM&#95;ERROR&#95;HANDLER&#41;;
+    assertThat&#40;response.body&#40;&#41;&#41;.endsWith&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
+    vertxTestContext.succeedingThenComplete&#40;&#41;;
+}
+</code></pre><h2>Failure handlers</h2><p>In some cases, you may want more fine-grained control over how errors are handled. This is where failure handlers come in. One or more failure handlers can be registered per route. They will handle errors in the order in which they are registered, until a handler successfully handles the error or an exception is thrown.</p><p>Like error handlers, failure handlers have access to the exception that led to their invocation. They also have access to the status code:</p><pre><code class="lang-java">@Test
+void failureHandlerCanHandleFailWithStatusCodeAndException&#40;VertxTestContext vertxTestContext&#41; {
+    var handlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+    var failureHandlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+
+    router.route&#40;&quot;/&quot;&#41;
+            .handler&#40;rc -&gt; {
+                handlerExecuted.flag&#40;&#41;;
+                rc.fail&#40;418, new RuntimeException&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;&#41;;
+            }&#41;
+            .failureHandler&#40;rc -&gt; {
+                failureHandlerExecuted.flag&#40;&#41;;
+                rc.response&#40;&#41;
+                        .setStatusCode&#40;rc.statusCode&#40;&#41;&#41;
+                        .end&#40;MESSAGE&#95;FROM&#95;FAILURE&#95;HANDLER + &quot;: &quot; + rc.failure&#40;&#41;.getMessage&#40;&#41;&#41;;
+            }&#41;;
+
+    var response = performGetRequest&#40;&quot;/&quot;&#41;;
+
+    assertThat&#40;response.statusCode&#40;&#41;&#41;.isEqualTo&#40;418&#41;;
+    assertThat&#40;response.body&#40;&#41;&#41;.startsWith&#40;MESSAGE&#95;FROM&#95;FAILURE&#95;HANDLER&#41;;
+    assertThat&#40;response.body&#40;&#41;&#41;.endsWith&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
+    vertxTestContext.succeedingThenComplete&#40;&#41;;
+}
+</code></pre><p>Once an failure handler has handled a failure successfully, no error handler will be invoked:</p><pre><code class="lang-java">@Test
+void errorHandlerIsIgnoredWhenFailureHandlerHandledFailure&#40;VertxTestContext vertxTestContext&#41; {
+    var handlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+    var failureHandlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+
+    router.route&#40;&quot;/&quot;&#41;
+            .handler&#40;rc -&gt; {
+                handlerExecuted.flag&#40;&#41;;
+                throw new RuntimeException&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
+            }&#41;
+            .failureHandler&#40;rc -&gt; {
+                failureHandlerExecuted.flag&#40;&#41;;
+                rc.response&#40;&#41;
+                        .setStatusCode&#40;rc.statusCode&#40;&#41;&#41;
+                        .end&#40;MESSAGE&#95;FROM&#95;FAILURE&#95;HANDLER + &quot;: &quot; + rc.failure&#40;&#41;.getMessage&#40;&#41;&#41;;
+            }&#41;;
+    router.errorHandler&#40;500, rc -&gt; vertxTestContext.failNow&#40;&quot;Error should not reach error handler&quot;&#41;&#41;;
+
+    var response = performGetRequest&#40;&quot;/&quot;&#41;;
+
+    assertThat&#40;response.statusCode&#40;&#41;&#41;.isEqualTo&#40;500&#41;;
+    assertThat&#40;response.body&#40;&#41;&#41;.startsWith&#40;MESSAGE&#95;FROM&#95;FAILURE&#95;HANDLER&#41;;
+    assertThat&#40;response.body&#40;&#41;&#41;.endsWith&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
+    vertxTestContext.succeedingThenComplete&#40;&#41;;
+}
+</code></pre><p>If a failure handler is unable to handle a certain failure, it can let it be handled by the next failure handler:</p><pre><code class="lang-java">@Test
+void failureHandlerCanDeferToNextFailureHandler&#40;VertxTestContext vertxTestContext&#41; {
+    var handlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+    var firstFailureHandlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+    var secondFailureHandlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+
+    router.route&#40;&quot;/&quot;&#41;
+            .handler&#40;rc -&gt; {
+                handlerExecuted.flag&#40;&#41;;
+                throw new RuntimeException&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
+            }&#41;
+            .failureHandler&#40;rc -&gt; {
+                firstFailureHandlerExecuted.flag&#40;&#41;;
+                rc.next&#40;&#41;;
+            }&#41;
+            .failureHandler&#40;rc -&gt; {
+                secondFailureHandlerExecuted.flag&#40;&#41;;
+                rc.response&#40;&#41;
+                        .setStatusCode&#40;rc.statusCode&#40;&#41;&#41;
+                        .end&#40;MESSAGE&#95;FROM&#95;FAILURE&#95;HANDLER + &quot;: &quot; + rc.failure&#40;&#41;.getMessage&#40;&#41;&#41;;
+            }&#41;;
+
+    var response = performGetRequest&#40;&quot;/&quot;&#41;;
+
+    assertThat&#40;response.statusCode&#40;&#41;&#41;.isEqualTo&#40;500&#41;;
+    assertThat&#40;response.body&#40;&#41;&#41;.startsWith&#40;MESSAGE&#95;FROM&#95;FAILURE&#95;HANDLER&#41;;
+    assertThat&#40;response.body&#40;&#41;&#41;.endsWith&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
+    vertxTestContext.succeedingThenComplete&#40;&#41;;
+}
+</code></pre><p>If handling a failure leads to an exception, the handling of the original failure is taken over by the error handler:</p><pre><code class="lang-java">@Test
+void exceptionInFailureHandlerIsIgnoredByErrorHandler&#40;VertxTestContext vertxTestContext&#41; {
+    var handlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+    var failureHandlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+    var errorHandlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+
+    router.route&#40;&quot;/&quot;&#41;
+            .handler&#40;rc -&gt; {
+                handlerExecuted.flag&#40;&#41;;
+                throw new RuntimeException&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
+            }&#41;
+            .failureHandler&#40;rc -&gt; {
+                failureHandlerExecuted.flag&#40;&#41;;
+                throw new RuntimeException&#40;FAILURE&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
+            }&#41;;
+
+    router.errorHandler&#40;500, rc -&gt; {
+        errorHandlerExecuted.flag&#40;&#41;;
+        rc.response&#40;&#41;
+                .setStatusCode&#40;500&#41;
+                .end&#40;MESSAGE&#95;FROM&#95;ERROR&#95;HANDLER + &quot;: &quot; + rc.failure&#40;&#41;.getMessage&#40;&#41;&#41;;
+    }&#41;;
+
+    var response = performGetRequest&#40;&quot;/&quot;&#41;;
+
+    assertThat&#40;response.statusCode&#40;&#41;&#41;.isEqualTo&#40;500&#41;;
+    assertThat&#40;response.body&#40;&#41;&#41;.startsWith&#40;MESSAGE&#95;FROM&#95;ERROR&#95;HANDLER&#41;;
+    assertThat&#40;response.body&#40;&#41;&#41;.endsWith&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
+    vertxTestContext.succeedingThenComplete&#40;&#41;;
+}
+</code></pre><p>If there is no error handler registered for status code 500, an exception thrown in a failure handler will lead to an internal server error.</p><p>We saw above that error handlers registered on sub router are ignored. Failure handlers registered for routes on a sub router function as expected, however. The failure handler registered for one of the routes of a sub router can either return a response itself or fall back to the failure handler of another matching route:</p><pre><code class="lang-java">@Test
+void failureHandlerForSubRouterCanFallBackToFailureHandlerForRoot&#40;Vertx vertx, VertxTestContext vertxTestContext&#41; {
+    var handlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+    var rootFailureHandlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+    var subFailureHandlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
+
+    var subRouter = Router.router&#40;vertx&#41;;
+    subRouter.route&#40;&quot;/route&quot;&#41;
+            .handler&#40;rc -&gt; {
+                handlerExecuted.flag&#40;&#41;;
+                throw new RuntimeException&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
+            }&#41;
+            .failureHandler&#40;rc -&gt; {
+                subFailureHandlerExecuted.flag&#40;&#41;;
+                rc.next&#40;&#41;;
+            }&#41;;
+
+    router.route&#40;&quot;/sub/&#42;&quot;&#41;
+            .subRouter&#40;subRouter&#41;;
+
+    router.route&#40;&#41;
+            .failureHandler&#40;rc -&gt; {
+                rootFailureHandlerExecuted.flag&#40;&#41;;
+                rc.response&#40;&#41;
+                        .setStatusCode&#40;500&#41;
+                        .end&#40;MESSAGE&#95;FROM&#95;FAILURE&#95;HANDLER + &quot;: &quot; + rc.failure&#40;&#41;.getMessage&#40;&#41;&#41;;
+            }&#41;;
+
+    var response = performGetRequest&#40;&quot;/sub/route&quot;&#41;;
+
+    assertThat&#40;response.statusCode&#40;&#41;&#41;.isEqualTo&#40;500&#41;;
+    assertThat&#40;response.body&#40;&#41;&#41;.startsWith&#40;MESSAGE&#95;FROM&#95;FAILURE&#95;HANDLER&#41;;
+    assertThat&#40;response.body&#40;&#41;&#41;.endsWith&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
+    vertxTestContext.succeedingThenComplete&#40;&#41;;
+}
+</code></pre><h2>Conclusion</h2><p>As we've seen, error handlers are pretty straightforward. There can be only one error handler per status code, practically speaking, and this handler will handle each error for the given status code if that error has not been handled otherwise.</p><p>There's a little more to say about failure handlers. There can be multiple error handlers per route, which will handle errors in the order in which the handlers are registered. In case of overlapping routes (multiple routes that match the path of a given request), the failure handlers for each of these routes are invoked in the order in which the routes are registered. Each failure handler can decide to let the next failure handler handle an error.</p><p>I hope this post provides a useful addition to Vert.x's official documentation. If you want to experiment a little yourself, clone and browse <a href='https://github.com/ljpengelen/vertx-error-and-failure-handlers'>https://github.com/ljpengelen/vertx-error-and-failure-handlers</a> for some inspiration and a nice starting point.</p>
+
+<p>
+  <i>Published: 2024-11-22</i>
+  
+</p>
+
+<p>
+  <i>
+  Tagged:
+  
+  <span class="tag">
+    <a href="tags/Vert-x.html">Vert.x</a>
+  </span>
+  
+  <span class="tag">
+    <a href="tags/Java.html">Java</a>
+  </span>
+  
+  </i>
+</p>
+
+
+    </div>
+    
+      <div class="comments">
+        <h2>Comments</h2>
+        <div class="tiny-utterances"
+          data-repo-owner="cofx22"
+          data-repo-name="blog"
+          data-issue-number="9"
+          data-max-comments="10">
+          <a class="tu-button" href="https://github.com/cofx22/blog/issues/9">Discuss this post on Github</a>
+        </div>
+      </div>
+    
+  </body>
+</html>

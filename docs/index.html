@@ -74,6 +74,15 @@
       <div class="post-previews">
     
         <div class="post-preview">
+            <h1><a href="vertx-error-handlers-failure-handlers.html">Error handlers and failure handlers in Vert.x</a></h1>
+            <p><a href='https://vertx.io/'>Vert.x</a> is a toolkit for developing reactive applications on the JVM. I wrote a <a href='reactive-java-with-vertx.html'>short introductory post</a> about it earlier, when I used it for a commercial project. I had to revisit a Vert.x-based hobby project a few weeks ago, and I learned that there were some gaps in my knowledge about how Vert.x handles failures and errors. To fill those gaps, I did some experiments, wrote a few tests, and then wrote this blog post.</p>
+            
+                <p><a href="vertx-error-handlers-failure-handlers.html">Continue reading</a></p>
+            
+            
+        </div>
+    
+        <div class="post-preview">
             <h1><a href="to-transduce-or-not-to-transduce.html">To transduce or not to transduce?</a></h1>
             <p>Transducers are to Clojure what monads are to Haskell: an almost endless source of inspiration for blog posts and discussions. I've heard and read about transducer in the past, but never got around to taking a real close look for myself. Now that I did take a closer look, I also learned some interesting things about Java's <code>volatile</code> keyword, the Java memory model, and the Java Concurrency Stress tests.</p>
             
@@ -87,15 +96,6 @@
             <p>Creating indexes for MongoDB collections with Spring Boot is easy. You annotate your entities with the correct annotations, you set <code>spring.data.mongodb.auto-index-creation</code> to <code>true</code> in your configuration file, and you're done. Indexes will be created when you start your application.</p><p>Over time, however, people will start using your application, and your MongoDB collections will grow as a result. Creating an index for an empty collections takes very little time. Creating an index for a big collection can take a while. Because of this, configuring Spring to handle index creation on startup can lead to unpleasant surprises. The startup of your application will block until the new index is created, and this can take a while for existing, large collections.</p><p>Additionally, your application will not start at all if something goes wrong while creating an index. This could happen if you try to modify an existing index, for example.</p><p>All in all, it's worthwhile to take a closer look at various ways to programmatically create, find, and delete indexes.</p>
             
                 <p><a href="mongodb-indices-spring.html">Continue reading</a></p>
-            
-            
-        </div>
-    
-        <div class="post-preview">
-            <h1><a href="tiny-utterances.html">Tiny Utterances: a minimalistic comment system</a></h1>
-            <p>Are you looking for a free, serverless™ comment system for a technical blog? Maybe <a href='https://cofx22.github.io/tiny-utterances/'>Tiny Utterances</a> is the tool you need. All you need to get started is a GitHub issue and a few lines of CSS and JavaScript.</p>
-            
-                <p><a href="tiny-utterances.html">Continue reading</a></p>
             
             
         </div>
