@@ -295,7 +295,16 @@ void failureHandlerForSubRouterCanFallBackToFailureHandlerForRoot(Vertx vertx, V
 
 ## Conclusion
 
+As we've seen, error handlers are pretty straightforward.
+There can be only one error handler per status code, practically speaking, and this handler will handle each error for the given status code if that error has not been handled otherwise.
+
+There's a little more to say about failure handlers.
+There can be multiple error handlers per route, which will handle errors in the order in which the handlers are registered.
+In case of overlapping routes (multiple routes that match the path of a given request),
+the failure handlers for each of these routes are invoked in the order in which the routes are registered.
+Each failure handler can decide to let the next failure handler handle an error.
+
 I hope this post provides a useful addition to Vert.x's official documentation.
 If you want to experiment a little yourself, clone and browse
 [https://github.com/ljpengelen/vertx-error-and-failure-handlers](https://github.com/ljpengelen/vertx-error-and-failure-handlers)
-for some inspiration.
+for some inspiration and a nice starting point.
