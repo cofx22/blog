@@ -253,7 +253,7 @@ an exception thrown in a failure handler will lead to an internal server error.
 We saw above that error handlers registered on sub router are ignored.
 Failure handlers registered for routes on a sub router function as expected, however.
 The failure handler registered for one of the routes of a sub router can either return a response itself or
-fallback to the failure handler of another matching route:
+fall back to the failure handler of another matching route:
 
 ```java
 @Test
