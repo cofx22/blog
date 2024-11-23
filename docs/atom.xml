@@ -3,11 +3,95 @@
   <title>blog by cofx</title>
   <link href="https://blog.cofx.nl/atom.xml" rel="self"/>
   <link href="https://blog.cofx.nl"/>
-  <updated>2024-11-23T12:44:54+00:00</updated>
+  <updated>2024-11-23T21:19:45+00:00</updated>
   <id>https://blog.cofx.nl</id>
   <author>
     <name>cofx</name>
   </author>
+  <entry>
+    <id>https://blog.cofx.nl/early-termination-of-transducers-and-reducing-functions.html</id>
+    <link href="https://blog.cofx.nl/early-termination-of-transducers-and-reducing-functions.html"/>
+    <title>Early termination of transducers and reducing functions</title>
+    <updated>2024-11-23T23:59:59+00:00</updated>
+    <content type="html"><![CDATA[<p>In the <a href='https://blog.cofx.nl/to-transduce-or-not-to-transduce.html'>previous post about transducers</a>, I did not discuss early termination of reducing functions and transducers. For the examples given in that post, early termination was irrelevant. It is, however, an important and tricky aspect of reducing functions and transducers.</p><!-- end-of-preview --><h2>Early termination of reducing functions</h2><p>The following reducing function is a variant on the function <code>first</code> and the transducer <code>&#40;take 1&#41;</code>, created specially for people with <a href='https://en.wikipedia.org/wiki/Highlander_&#40;film&#41;'>nostalgia for the 80s</a>.</p><pre><code class="lang-clojure">&#40;defn highlander-rf
+  &quot;There can be only one&quot;
+  &#91;&#95; input&#93; &#40;reduced input&#41;&#41;
+</code></pre><p>Although this function is largely useless in practice, it provides the most minimalist example of early termination. It takes an intermediate result and an input value, and returns this input value wrapped with a special object. Functions that use this reducing function will recognize this special object and know that they shouldn't provide any more input to this function.</p><p>The function <code>reduce</code> is one of those functions that recognize the wrapper object:</p><pre><code class="lang-clojure">&#40;reduce highlander-rf nil &#91;1 2 3 4&#93;&#41; ;; Evaluates to 1
+</code></pre><p>The function <code>reduce</code> will call <code>highlander-rf</code> with <code>nil</code> and 1 as arguments, and then won't call it any more.</p><p>This mechanism makes it possible to efficiently reduce large or even infinite collections. Once all relevant input has been processed, all irrelevant input that follows can be ignored.</p><h2>Using ensure-reduced inside transducers</h2><p>The following transducer has the same behavior as the reducing function above:</p><pre><code class="lang-clojure">&#40;defn highlander-tr
+  &quot;There can be only one&quot;
+  &#91;rf&#93;
+  &#40;fn
+    &#40;&#91;&#93; &#40;rf&#41;&#41;
+    &#40;&#91;result&#93; &#40;rf result&#41;&#41;
+    &#40;&#91;result input&#93; &#40;ensure-reduced &#40;rf result input&#41;&#41;&#41;&#41;&#41;
+</code></pre><p>The two-arity variant of this transducer takes a value as input and returns this value wrapped in the same special object again. It uses <code>ensure-reduced</code> to do this, instead of <code>reduced</code>. When implementing <code>highlander-tr</code>, it's not known what reducing function <code>rf</code> it will be used with. It could be that some of these functions will return a result that is already wrapped. The function <code>ensure-reduced</code> will ensure that an already wrapped result is not wrapped again. If the return value of <code>&#40;rf result input&#41;</code> is already wrapped using <code>reduced</code>, the result will be returned as-is. If it is not wrapped, <code>ensure-reduced</code> will wrap it.</p><p>The following example demonstrates the behavior of <code>highlander-tr</code>:<pre><code class="lang-clojure">&#40;into &#91;&#93;
+      highlander-tr
+      &#91;1 2 3 4&#93;&#41; ;; Evaluates to &#91;1&#93;
+</code></pre></p><h2>Using reduced? inside transducers</h2><p>The following reducer does a little more than the one we just saw:</p><pre><code class="lang-clojure">&#40;defn broken-stutter &#91;rf&#93;
+  &#40;fn
+    &#40;&#91;&#93; &#40;rf&#41;&#41;
+    &#40;&#91;result&#93; &#40;rf result&#41;&#41;
+    &#40;&#91;result input&#93;
+     &#40;rf &#40;rf result input&#41; input&#41;&#41;&#41;&#41;
+</code></pre><p>This transducer will output each value it receives as input twice. As its name suggests, it is broken. Unfortunately, that is not that easy to notice.</p><p>Evaluating the following example leads to the result you'd expect:</p><pre><code class="lang-clojure">&#40;transduce
+ broken-stutter
+ conj
+ &#91;&#93;
+ &#91;1 2 3 4 5 6&#93;&#41; ;; Evaluates to &#91;1 1 2 2 3 3 4 4 5 5 6 6&#93;
+</code></pre><p>When used together with the following reducing function that terminates early, however, the transducer will not always behave as expected:</p><pre><code class="lang-clojure">&#40;defn limited-conj &#91;n&#93;
+  &#40;fn 
+    &#40;&#91;result&#93; result&#41;
+    &#40;&#91;result input&#93;
+     &#40;if &#40;&gt;= &#40;count result&#41; n&#41;
+       &#40;reduced result&#41;
+       &#40;conj result input&#41;&#41;&#41;&#41;&#41;
+</code></pre><p>The reducing function above behaves the same as <code>conj</code>, until the collection passed as intermediate result contains at least <code>n</code> values. Once that threshold has been reached, the intermediate result is returned as final result.</p><p>Combining the reducing function <code>limited-conj</code> with the transducer <code>broken-stutter</code> can bring the issue with <code>broken-stutter</code> to the surface. The following expression cannot be evaluated, for example:</p><pre><code class="lang-clojure">&#40;transduce
+ broken-stutter
+ &#40;limited-conj 6&#41;
+ &#91;&#93;
+ &#91;1 2 3 4 5 6&#93;&#41;
+</code></pre><p> The following expression <em>can</em> be evaluated, however, which highlights why dealing with early termination can be tricky:</p><pre><code class="lang-clojure">&#40;transduce
+ broken-stutter
+ &#40;limited-conj 5&#41;
+ &#91;&#93;
+ &#91;1 2 3 4 5 6&#93;&#41; ;; Evaluates to &#91;1 1 2 2 3&#93;
+</code></pre><p>The problem with <code>broken-stutter</code> is that it may apply the reducing function <code>rf</code> to a result that is already wrapped using <code>reduced</code>. The following variant fixes that issue:</p><pre><code class="lang-clojure">&#40;defn stutter &#91;rf&#93;
+  &#40;fn
+    &#40;&#91;&#93; &#40;rf&#41;&#41;
+    &#40;&#91;result&#93; &#40;rf result&#41;&#41;
+    &#40;&#91;result input&#93;
+     &#40;let &#91;intermediate &#40;rf result input&#41;&#93;
+       &#40;if &#40;reduced? intermediate&#41;
+         intermediate
+         &#40;rf intermediate input&#41;&#41;&#41;&#41;&#41;&#41;
+</code></pre><p>This variant checks whether the intermediate result is already reduced and does not apply <code>rf</code> if that is the case.</p><pre><code class="lang-clojure">&#40;transduce
+ stutter
+ &#40;limited-conj 6&#41;
+ &#91;&#93;
+ &#91;1 2 3 4 5 6&#93;&#41; ;; Evaluates to &#91;1 1 2 2 3 3&#93;
+</code></pre><h2>Using unreduced inside transducers</h2><p>There's one more scenario regarding early termination that I'd like to describe. Because this scenario is also tricky, we need another reducing function that terminates early to demonstrate it. The following function is taken from <a href='https://clojuredocs.org/clojure.core/unreduced#example-64458dd4e4b08cf8563f4b96'>ClojureDocs</a>:</p><pre><code class="lang-clojure">&#40;defn conj-till-odd
+  &#40;&#91;coll&#93; coll&#41;
+  &#40;&#91;coll x&#93; &#40;cond-&gt; &#40;conj coll x&#41;
+              &#40;odd? x&#41; reduced&#41;&#41;&#41;
+</code></pre><p>It behaves as <code>conj</code> until an odd value is received as input.</p><p>The following stateful transducer outputs each input value it receives and stores the last one. Once all input has been processed, the last input value is added to the output again.</p><pre><code class="lang-clojure">&#40;defn repeat-last &#91;rf&#93;
+  &#40;let &#91;pv &#40;volatile! nil&#41;&#93;
+    &#40;fn
+      &#40;&#91;&#93; &#40;rf&#41;&#41;
+      &#40;&#91;result&#93;
+       &#40;if-let &#91;p @pv&#93;
+         &#40;unreduced &#40;rf result p&#41;&#41;
+         &#40;rf result&#41;&#41;&#41;
+      &#40;&#91;result input&#93;
+       &#40;let &#91;result &#40;rf result input&#41;&#93;
+         &#40;vreset! pv input&#41;
+         result&#41;&#41;&#41;&#41;&#41;
+</code></pre><p>This transducer uses <code>unreduced</code> to ensure that the final result returned by the single-arity variant of this function is not wrapped with <code>reduced</code>. It could be that the result of <code>&#40;rf result p&#41;</code> is wrapped with <code>reduced</code>. If that is the case, this wrapper should be removed because it has no place in the output of the transducer.</p><p>If a reducing function or the two-arity variant of a transducer returns a value wrapped with <code>reduced</code>, this wrapper is only intended to signal that the reducing function or transducer will not process any more input values. Whoever is using the reducing function or transducer should stop feeding it more input values and remove the wrapper from the final result. The transducer <code>stutter</code> demonstrates the first action, and the transducer <code>repeat-last</code> demonstrates the second action.</p><p>The following example illustrates the use of <code>repeat-last</code> in combination with <code>conj-till-odd</code>:</p><pre><code class="lang-clojure">&#40;transduce
+ repeat-last
+ conj-till-odd
+ &#91;&#93;
+ &#91;2 4 3 2&#93;&#41; ;; Evaluates to &#91;2 4 3 3&#93;
+</code></pre><h2>Conclusion</h2><p>See <a href='https://github.com/ljpengelen/transduce-shakespeare/tree/main/transduce-clj'>https://github.com/ljpengelen/transduce-shakespeare/tree/main/transduce-clj</a> for a Clojure project containing some expressions that illustrate the concepts described in this post.</p>]]></content>
+  </entry>
   <entry>
     <id>https://blog.cofx.nl/vertx-error-handlers-failure-handlers.html</id>
     <link href="https://blog.cofx.nl/vertx-error-handlers-failure-handlers.html"/>
