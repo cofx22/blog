@@ -153,6 +153,14 @@ code[class*=language-] {
   gap: 1rem;
 }
 
+.archive-footer {
+  display: flex;
+}
+
+.archive-footer a {
+  margin: 2rem auto;
+}
+
 .comments {
   padding-top: 1rem;
   padding-bottom: 2rem;
