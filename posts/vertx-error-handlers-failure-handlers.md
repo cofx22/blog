@@ -17,7 +17,7 @@ To fill those gaps, I did some experiments, wrote a few tests, and then wrote th
 The heart of most Vert.x-based web applications is a router.
 The router routes requests to zero or more requests handlers, based on the path of the requests.
 If all goes well, the handler that is handling a given request will issue a response.
-When something does go wrong, Vert.x offers failure handlers and error handlers to handle the situation.
+Vert.x offers failure handlers and error handlers to handle the situation when things go wrong.
 
 ## How to signal that something went wrong in a request handler?
 
