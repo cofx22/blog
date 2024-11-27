@@ -64,7 +64,6 @@ void errorHandlerCanHandleException(VertxTestContext vertxTestContext) {
     assertThat(response.statusCode()).isEqualTo(500);
     assertThat(response.body()).startsWith(MESSAGE_FROM_ERROR_HANDLER);
     assertThat(response.body()).endsWith(REQUEST_HANDLER_ERROR_MESSAGE);
-    vertxTestContext.succeedingThenComplete();
 }
 ```
 
@@ -104,7 +103,6 @@ void errorHandlerForSubRouterIsIgnored(Vertx vertx, VertxTestContext vertxTestCo
     assertThat(response.statusCode()).isEqualTo(500);
     assertThat(response.body()).startsWith(MESSAGE_FROM_ERROR_HANDLER);
     assertThat(response.body()).endsWith(REQUEST_HANDLER_ERROR_MESSAGE);
-    vertxTestContext.succeedingThenComplete();
 }
 ```
 
@@ -141,7 +139,6 @@ void failureHandlerCanHandleFailWithStatusCodeAndException(VertxTestContext vert
     assertThat(response.statusCode()).isEqualTo(418);
     assertThat(response.body()).startsWith(MESSAGE_FROM_FAILURE_HANDLER);
     assertThat(response.body()).endsWith(REQUEST_HANDLER_ERROR_MESSAGE);
-    vertxTestContext.succeedingThenComplete();
 }
 ```
 
@@ -172,7 +169,6 @@ void errorHandlerIsIgnoredWhenFailureHandlerHandledFailure(VertxTestContext vert
     assertThat(response.statusCode()).isEqualTo(500);
     assertThat(response.body()).startsWith(MESSAGE_FROM_FAILURE_HANDLER);
     assertThat(response.body()).endsWith(REQUEST_HANDLER_ERROR_MESSAGE);
-    vertxTestContext.succeedingThenComplete();
 }
 ```
 
@@ -207,7 +203,6 @@ void failureHandlerCanDeferToNextFailureHandler(VertxTestContext vertxTestContex
     assertThat(response.statusCode()).isEqualTo(500);
     assertThat(response.body()).startsWith(MESSAGE_FROM_FAILURE_HANDLER);
     assertThat(response.body()).endsWith(REQUEST_HANDLER_ERROR_MESSAGE);
-    vertxTestContext.succeedingThenComplete();
 }
 ```
 
@@ -243,7 +238,6 @@ void exceptionInFailureHandlerIsIgnoredByErrorHandler(VertxTestContext vertxTest
     assertThat(response.statusCode()).isEqualTo(500);
     assertThat(response.body()).startsWith(MESSAGE_FROM_ERROR_HANDLER);
     assertThat(response.body()).endsWith(REQUEST_HANDLER_ERROR_MESSAGE);
-    vertxTestContext.succeedingThenComplete();
 }
 ```
 
@@ -289,7 +283,6 @@ void failureHandlerForSubRouterCanFallBackToFailureHandlerForRoot(Vertx vertx, V
     assertThat(response.statusCode()).isEqualTo(500);
     assertThat(response.body()).startsWith(MESSAGE_FROM_FAILURE_HANDLER);
     assertThat(response.body()).endsWith(REQUEST_HANDLER_ERROR_MESSAGE);
-    vertxTestContext.succeedingThenComplete();
 }
 ```
 
