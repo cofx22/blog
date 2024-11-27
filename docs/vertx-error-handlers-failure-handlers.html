@@ -97,7 +97,6 @@ void errorHandlerCanHandleException&#40;VertxTestContext vertxTestContext&#41; {
     assertThat&#40;response.statusCode&#40;&#41;&#41;.isEqualTo&#40;500&#41;;
     assertThat&#40;response.body&#40;&#41;&#41;.startsWith&#40;MESSAGE&#95;FROM&#95;ERROR&#95;HANDLER&#41;;
     assertThat&#40;response.body&#40;&#41;&#41;.endsWith&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
-    vertxTestContext.succeedingThenComplete&#40;&#41;;
 }
 </code></pre><p>As discussed above, the error handler has access to the exception that led to the invocation of the error handler. In this example, the error handler for status code 500 handles the error because this is the default status code when no other status code is provided.</p><p>Vert.x supports splitting up a single (large) router into multiple smaller ones using sub routers. Although error handlers can be registered for each sub router, they will simply be ignored:</p><pre><code class="lang-java">@Test
 void errorHandlerForSubRouterIsIgnored&#40;Vertx vertx, VertxTestContext vertxTestContext&#41; {
@@ -128,7 +127,6 @@ void errorHandlerForSubRouterIsIgnored&#40;Vertx vertx, VertxTestContext vertxTe
     assertThat&#40;response.statusCode&#40;&#41;&#41;.isEqualTo&#40;500&#41;;
     assertThat&#40;response.body&#40;&#41;&#41;.startsWith&#40;MESSAGE&#95;FROM&#95;ERROR&#95;HANDLER&#41;;
     assertThat&#40;response.body&#40;&#41;&#41;.endsWith&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
-    vertxTestContext.succeedingThenComplete&#40;&#41;;
 }
 </code></pre><h2>Failure handlers</h2><p>In some cases, you may want more fine-grained control over how errors are handled. This is where failure handlers come in. One or more failure handlers can be registered per route. They will handle errors in the order in which they are registered, until a handler successfully handles the error or an exception is thrown.</p><p>Like error handlers, failure handlers have access to the exception that led to their invocation. They also have access to the status code:</p><pre><code class="lang-java">@Test
 void failureHandlerCanHandleFailWithStatusCodeAndException&#40;VertxTestContext vertxTestContext&#41; {
@@ -152,7 +150,6 @@ void failureHandlerCanHandleFailWithStatusCodeAndException&#40;VertxTestContext 
     assertThat&#40;response.statusCode&#40;&#41;&#41;.isEqualTo&#40;418&#41;;
     assertThat&#40;response.body&#40;&#41;&#41;.startsWith&#40;MESSAGE&#95;FROM&#95;FAILURE&#95;HANDLER&#41;;
     assertThat&#40;response.body&#40;&#41;&#41;.endsWith&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
-    vertxTestContext.succeedingThenComplete&#40;&#41;;
 }
 </code></pre><p>Once an failure handler has handled a failure successfully, no error handler will be invoked:</p><pre><code class="lang-java">@Test
 void errorHandlerIsIgnoredWhenFailureHandlerHandledFailure&#40;VertxTestContext vertxTestContext&#41; {
@@ -177,7 +174,6 @@ void errorHandlerIsIgnoredWhenFailureHandlerHandledFailure&#40;VertxTestContext 
     assertThat&#40;response.statusCode&#40;&#41;&#41;.isEqualTo&#40;500&#41;;
     assertThat&#40;response.body&#40;&#41;&#41;.startsWith&#40;MESSAGE&#95;FROM&#95;FAILURE&#95;HANDLER&#41;;
     assertThat&#40;response.body&#40;&#41;&#41;.endsWith&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
-    vertxTestContext.succeedingThenComplete&#40;&#41;;
 }
 </code></pre><p>If a failure handler is unable to handle a certain failure, it can let it be handled by the next failure handler:</p><pre><code class="lang-java">@Test
 void failureHandlerCanDeferToNextFailureHandler&#40;VertxTestContext vertxTestContext&#41; {
@@ -206,7 +202,6 @@ void failureHandlerCanDeferToNextFailureHandler&#40;VertxTestContext vertxTestCo
     assertThat&#40;response.statusCode&#40;&#41;&#41;.isEqualTo&#40;500&#41;;
     assertThat&#40;response.body&#40;&#41;&#41;.startsWith&#40;MESSAGE&#95;FROM&#95;FAILURE&#95;HANDLER&#41;;
     assertThat&#40;response.body&#40;&#41;&#41;.endsWith&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
-    vertxTestContext.succeedingThenComplete&#40;&#41;;
 }
 </code></pre><p>If handling a failure leads to an exception, the handling of the original failure is taken over by the error handler:</p><pre><code class="lang-java">@Test
 void exceptionInFailureHandlerIsIgnoredByErrorHandler&#40;VertxTestContext vertxTestContext&#41; {
@@ -236,7 +231,6 @@ void exceptionInFailureHandlerIsIgnoredByErrorHandler&#40;VertxTestContext vertx
     assertThat&#40;response.statusCode&#40;&#41;&#41;.isEqualTo&#40;500&#41;;
     assertThat&#40;response.body&#40;&#41;&#41;.startsWith&#40;MESSAGE&#95;FROM&#95;ERROR&#95;HANDLER&#41;;
     assertThat&#40;response.body&#40;&#41;&#41;.endsWith&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
-    vertxTestContext.succeedingThenComplete&#40;&#41;;
 }
 </code></pre><p>If there is no error handler registered for status code 500, an exception thrown in a failure handler will lead to an internal server error.</p><p>We saw above that error handlers registered on sub router are ignored. Failure handlers registered for routes on a sub router function as expected, however. The failure handler registered for one of the routes of a sub router can either return a response itself or fall back to the failure handler of another matching route:</p><pre><code class="lang-java">@Test
 void failureHandlerForSubRouterCanFallBackToFailureHandlerForRoot&#40;Vertx vertx, VertxTestContext vertxTestContext&#41; {
@@ -271,7 +265,6 @@ void failureHandlerForSubRouterCanFallBackToFailureHandlerForRoot&#40;Vertx vert
     assertThat&#40;response.statusCode&#40;&#41;&#41;.isEqualTo&#40;500&#41;;
     assertThat&#40;response.body&#40;&#41;&#41;.startsWith&#40;MESSAGE&#95;FROM&#95;FAILURE&#95;HANDLER&#41;;
     assertThat&#40;response.body&#40;&#41;&#41;.endsWith&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
-    vertxTestContext.succeedingThenComplete&#40;&#41;;
 }
 </code></pre><h2>Conclusion</h2><p>As we've seen, error handlers are pretty straightforward. There can be only one error handler per status code, practically speaking, and this handler will handle each error for the given status code if that error has not been handled otherwise.</p><p>There's a little more to say about failure handlers. There can be multiple error handlers per route, which will handle errors in the order in which the handlers are registered. In case of overlapping routes (multiple routes that match the path of a given request), the failure handlers for each of these routes are invoked in the order in which the routes are registered. Each failure handler can decide to let the next failure handler handle an error.</p><p>I hope this post provides a useful addition to Vert.x's official documentation. If you want to experiment a little yourself, clone and browse <a href='https://github.com/ljpengelen/vertx-error-and-failure-handlers'>https://github.com/ljpengelen/vertx-error-and-failure-handlers</a> for some inspiration and a nice starting point.</p>
 
