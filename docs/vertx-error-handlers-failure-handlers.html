@@ -232,7 +232,7 @@ void exceptionInFailureHandlerIsIgnoredByErrorHandler&#40;VertxTestContext vertx
     assertThat&#40;response.body&#40;&#41;&#41;.startsWith&#40;MESSAGE&#95;FROM&#95;ERROR&#95;HANDLER&#41;;
     assertThat&#40;response.body&#40;&#41;&#41;.endsWith&#40;REQUEST&#95;HANDLER&#95;ERROR&#95;MESSAGE&#41;;
 }
-</code></pre><p>If there is no error handler registered for status code 500, an exception thrown in a failure handler will lead to an internal server error.</p><p>We saw above that error handlers registered on sub router are ignored. Failure handlers registered for routes on a sub router function as expected, however. The failure handler registered for one of the routes of a sub router can either return a response itself or fall back to the failure handler of another matching route:</p><pre><code class="lang-java">@Test
+</code></pre><p>If there is no error handler registered for status code 500, an exception thrown in a failure handler will lead to an internal server error.</p><p>We saw above that error handlers registered on sub routers are ignored. Failure handlers registered for routes on a sub router function as expected, however. The failure handler registered for one of the routes of a sub router can either return a response itself or fall back to the failure handler of another matching route:</p><pre><code class="lang-java">@Test
 void failureHandlerForSubRouterCanFallBackToFailureHandlerForRoot&#40;Vertx vertx, VertxTestContext vertxTestContext&#41; {
     var handlerExecuted = vertxTestContext.checkpoint&#40;&#41;;
     var rootFailureHandlerExecuted = vertxTestContext.checkpoint&#40;&#41;;

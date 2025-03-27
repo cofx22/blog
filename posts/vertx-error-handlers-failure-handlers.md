@@ -244,7 +244,7 @@ void exceptionInFailureHandlerIsIgnoredByErrorHandler(VertxTestContext vertxTest
 If there is no error handler registered for status code 500,
 an exception thrown in a failure handler will lead to an internal server error.
 
-We saw above that error handlers registered on sub router are ignored.
+We saw above that error handlers registered on sub routers are ignored.
 Failure handlers registered for routes on a sub router function as expected, however.
 The failure handler registered for one of the routes of a sub router can either return a response itself or
 fall back to the failure handler of another matching route:
